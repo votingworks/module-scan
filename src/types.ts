@@ -41,5 +41,26 @@ export interface YesNoContest extends Contest {
 }
 export type Contests = Array<CandidateContest | YesNoContest>
 
-export type Ballot = Dictionary<string>
+export type Ballot = Dictionary<string|string[]>
 
+export type BallotCallbackFunction = (ballot: Ballot) => void
+
+export interface Party {
+  readonly id: string
+  readonly name: string
+  readonly abbrev: string
+}
+export type Parties = Party[]
+
+export interface Election {
+  readonly ballotStyles: BallotStyle[]
+  readonly parties: Parties
+  readonly precincts: Precinct[]
+  readonly districts: District[]
+  readonly contests: Contests
+  readonly county: string
+  readonly date: string
+  readonly seal: string
+  readonly state: string
+  readonly title: string
+}
