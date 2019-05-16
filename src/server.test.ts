@@ -5,6 +5,7 @@ import * as scanner from "./scanner"
 import election from '../election.json'
 
 jest.mock('./scanner.ts')
+const mockScanner = scanner as jest.Mocked<typeof scanner>
 
 test('GET /', (done) => {
   request(app)
@@ -56,12 +57,12 @@ test('POST /scan/export', (done) => {
 })
 
 test('GET /scan/status', (done) => {
-  //scanner.getStatus.mockResolvedValue({numBallots:10})
+  mockScanner.getStatus.mockResolvedValue({numBallots:10})
   request(app)
-    .get('/scan/status')
-    .set('Accept', 'application/json')
-    .expect(200, {numBallots:10})
-    .then(() => {
+	     .get('/scan/status')
+	     .set('Accept', 'application/json')
+	     .expect(200, {numBallots:10})
+    .then(_response => {
       expect(scanner.getStatus).toBeCalled()
       done()
     })

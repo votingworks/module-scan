@@ -37,7 +37,6 @@ app.post("/scan/export", (_request: Request, response: Response) => {
 app.get("/scan/status", (_request: Request, response: Response) => {
   getStatus()
     .then(status => {
-      console.log(status)
       response.json(status)
     })
 })
