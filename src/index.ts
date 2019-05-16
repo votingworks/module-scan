@@ -5,4 +5,5 @@ require("@babel/register")({
 });
 
 // Import the rest of our application.
-module.exports = require('./server.ts')
+const server = require('./server.ts')
+server.startApp()

@@ -38,3 +38,7 @@ export function reset() {
 export function addBallot(filename: string, ballot: Ballot) {
   db.run("insert into CVRs values (?,?)", filename, JSON.stringify(ballot))
 }
+
+export function countBallots() {
+  db.run("select count(*) from CVRs")
+}

@@ -43,7 +43,7 @@ export type Contests = Array<CandidateContest | YesNoContest>
 
 export type Ballot = Dictionary<string|string[]>
 
-export type BallotCallbackFunction = (ballot: Ballot) => void
+export type BallotCallbackFunction = (path: string, ballot: Ballot) => void
 
 export interface Party {
   readonly id: string

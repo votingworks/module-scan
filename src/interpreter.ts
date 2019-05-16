@@ -31,7 +31,7 @@ const scan = (im:Image) => {
   return secondScan
 }
 
-function interpretFile(path:string, callback:BallotCallbackFunction) {
+export function interpretFile(path:string, callback:BallotCallbackFunction) {
   ImageJS.Image.load(path).then(function(im:typeof Image) {
     const scanResult = scan(im)
     if (!scanResult) {
@@ -86,7 +86,7 @@ function interpretFile(path:string, callback:BallotCallbackFunction) {
     
     votes["_precinctId"] = precinctId
     
-    callback(votes)
+    callback(path, votes)
   })
   
 }

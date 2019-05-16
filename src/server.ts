@@ -5,14 +5,12 @@ import {getDB, reset, addBallot} from "./store"
 import * as interpreter from "./interpreter"
 import * as fs from 'fs'
 
-import {Ballot, Election} from "./types"
+import {Election} from "./types"
 
 // for now, we reset on every start
 reset()
 
-console.log(addBallot)
-
-const app : Application = express()
+export const app : Application = express()
 const port = 3002
 
 const electionPath = "./election.json"
@@ -26,8 +24,7 @@ app.post("/scan/configure", (_request: Request, _response: Response) => {
   const election = JSON.parse(fs.readFileSync(electionPath,"utf8")) as Election
 
   // start watching the ballots
-  interpreter.init(election, "./ballots", (_ballotToAdd:Ballot) => {
-  })
+  interpreter.init(election, "./ballots", addBallot)
 })
 
 app.post("/scan/scan", (_request: Request, _response: Response) => {
@@ -46,6 +43,8 @@ app.post("/scan/zero", (_request: Request, _response: Response) => {
   doZero(getDB())
 })
 
-app.listen(port, () => {
-    console.log(`Listening at http://localhost:${port}/`);
-});
+export function startApp() {
+  app.listen(port, () => {
+        console.log(`Listening at http://localhost:${port}/`);
+  });
+}
