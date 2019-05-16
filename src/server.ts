@@ -1,46 +1,50 @@
 
 import express, {Application, Request, Response} from "express"
-import {doScan, doExport, getStatus, doZero} from "./scanner"
-import {getDB, reset, addBallot} from "./store"
-import * as interpreter from "./interpreter"
-import * as fs from 'fs'
+import {configure, doScan, doExport, getStatus, doZero} from "./scanner"
+import * as store from "./store"
 
 import {Election} from "./types"
 
 // for now, we reset on every start
-reset()
+store.reset()
 
 export const app : Application = express()
 const port = 3002
 
-const electionPath = "./election.json"
+app.use(express.json())
 
 app.get("/", (_request : Request, response : Response) => {
   response.send("Hello!")
 })
 
-app.post("/scan/configure", (_request: Request, _response: Response) => {
+app.post("/scan/configure", (request: Request, response: Response) => {
   // store the election file
-  const election = JSON.parse(fs.readFileSync(electionPath,"utf8")) as Election
-
-  // start watching the ballots
-  interpreter.init(election, "./ballots", addBallot)
+  const election = request.body as Election
+  configure(election)
+  response.json({"status": "ok"})
 })
 
-app.post("/scan/scan", (_request: Request, _response: Response) => {
-  doScan(getDB())
+app.post("/scan/scan", (_request: Request, response: Response) => {
+  doScan(store.getDB())
+  response.json({"status": "ok"})
 })
 
-app.post("/scan/export", (_request: Request, _response: Response) => {
-  doExport(getDB())
+app.post("/scan/export", (_request: Request, response: Response) => {
+  doExport(store.getDB())
+  response.json({"status": "ok"})
 })
 
-app.get("/scan/status", (_request: Request, _response: Response) => {
-  getStatus(getDB())
+app.get("/scan/status", (_request: Request, response: Response) => {
+  getStatus()
+    .then(status => {
+      console.log(status)
+      response.json(status)
+    })
 })
 
-app.post("/scan/zero", (_request: Request, _response: Response) => {
-  doZero(getDB())
+app.post("/scan/zero", (_request: Request, response: Response) => {
+  doZero(store.getDB())
+  response.json({"status": "ok"})
 })
 
 export function startApp() {

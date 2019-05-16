@@ -1,8 +1,12 @@
 
 import * as sqlite3 from 'sqlite3'
+import {Election} from './types'
+import {addBallot} from './store'
+import * as interpreter from './interpreter'
 
-export function configure(db : sqlite3.Database) {
-  console.log(db)
+export function configure(election:Election) {
+  // start watching the ballots
+  interpreter.init(election, "./ballots", addBallot)
 }
 
 export function doScan(db : sqlite3.Database) {
@@ -17,6 +21,8 @@ export function doZero(db : sqlite3.Database) {
   console.log(db)  
 }
 
-export function getStatus(db : sqlite3.Database) {
-  console.log(db)  
+export function getStatus() {
+  return new Promise((resolve, _reject) => {
+    resolve({numBallots:10})
+  })
 }
