@@ -4,11 +4,21 @@ This web server component provides a web interface to a scanner
 
 ## Install Requisite Software
 
+```
+yarn install
+```
 
 ## Run Tests
 
+```
+yarn test
+```
 
 ## Start the Server
+
+```
+yarn start
+```
 
 ## API Documentation
 
