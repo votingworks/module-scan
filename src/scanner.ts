@@ -1,4 +1,9 @@
 
+//
+// The scanner's entire exposed functionality, independent
+// of the HTTP calls.
+//
+
 import * as sqlite3 from 'sqlite3'
 import {Election} from './types'
 import {addBallot} from './store'

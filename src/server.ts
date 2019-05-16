@@ -1,4 +1,9 @@
 
+//
+// Just the HTTP glue to the functionality, no implementations.
+// All actual implementations are in scanner.ts
+//
+
 import express, {Application, Request, Response} from "express"
 import {configure, doScan, doExport, getStatus, doZero} from "./scanner"
 import * as store from "./store"
@@ -46,7 +51,7 @@ app.post("/scan/zero", (_request: Request, response: Response) => {
   response.json({"status": "ok"})
 })
 
-export function startApp() {
+export function start() {
   app.listen(port, () => {
         console.log(`Listening at http://localhost:${port}/`);
   });

@@ -1,4 +1,9 @@
 
+//
+// The Interpreter watches a directory where scanned ballot images will appear
+// and process/interpret them into a cast-vote record.
+//
+
 import * as chokidar from 'chokidar'
 import * as ImageJS from 'image-js'
 import jsQR from "jsqr"
@@ -15,7 +20,10 @@ export function init(e:Election, directoryToWatch:string, callback:BallotCallbac
 
 // @ts-ignore image type not defined
 const scan = (im:Image) => {
-  // look at rough regions where the QR code is expected
+  // the QR code is roughly in the top-right 1/4 * 2/5 corner
+  // or equivalent bottom-left corner. Looking at smaller portions
+  // of the image increases the chance of recognizing the QR code
+  // at lower resolutions
   
   const [width, height] = im.sizes
 

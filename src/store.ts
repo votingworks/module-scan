@@ -1,4 +1,8 @@
 
+//
+// The durable datastore for CVRs and configuration info.
+//
+
 import * as sqlite3 from 'sqlite3'
 import fs from 'fs'
 

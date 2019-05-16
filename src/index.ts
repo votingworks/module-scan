@@ -6,4 +6,4 @@ require("@babel/register")({
 
 // Import the rest of our application.
 const server = require('./server.ts')
-server.startApp()
+server.start()
