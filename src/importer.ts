@@ -7,7 +7,7 @@ import { Election } from '@votingworks/ballot-encoder'
 
 import { CVRCallbackParams, CastVoteRecord, BatchInfo } from './types'
 import Store from './store'
-import interpretFile, { interpretBallotString } from './interpreter'
+import interpretFile, { interpretBallotData } from './interpreter'
 import { Scanner } from './scanner'
 
 interface CVRCallbackWithBatchIDParams extends CVRCallbackParams {
@@ -98,7 +98,7 @@ export default class SystemImporter implements Importer {
       this.manualBatchId = await this.store.addBatch()
     }
 
-    const cvr = interpretBallotString({
+    const cvr = interpretBallotData({
       election: this.election,
       encodedBallot,
     })
@@ -123,13 +123,21 @@ export default class SystemImporter implements Importer {
         pollInterval: 200,
       },
     })
-    this.watcher.on('add', path => this.fileAdded(path))
+    this.watcher.on('add', async path => {
+      try {
+        await this.fileAdded(path)
+      } catch (error) {
+        process.stderr.write(
+          `unable to process file (${path}): ${error.stack}\n`
+        )
+      }
+    })
   }
 
   /**
    * Callback for chokidar to inform us that a new file was seen.
    */
-  private fileAdded(ballotImagePath: string) {
+  private async fileAdded(ballotImagePath: string) {
     if (!this.election) {
       return
     }
@@ -144,7 +152,7 @@ export default class SystemImporter implements Importer {
 
     const batchId = parseInt(batchIdMatch[1])
 
-    interpretFile({
+    await interpretFile({
       election: this.election,
       ballotImagePath,
       cvrCallback: ({ ballotImagePath, cvr }: CVRCallbackParams) => {
