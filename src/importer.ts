@@ -7,7 +7,7 @@ import { Election } from '@votingworks/ballot-encoder'
 
 import { CVRCallbackParams, CastVoteRecord, BatchInfo } from './types'
 import Store from './store'
-import DefaultInterpreter, {
+import SummaryBallotInterpreter, {
   Interpreter,
   interpretBallotData,
 } from './interpreter'
@@ -75,7 +75,7 @@ export default class SystemImporter implements Importer {
     scanner,
     ballotImagesPath = DefaultBallotImagesPath,
     importedBallotImagesPath = DefaultImportedBallotImagesPath,
-    interpreter = new DefaultInterpreter(),
+    interpreter = new SummaryBallotInterpreter(),
   }: Partial<Exclude<Options, 'store' | 'scanner'>> & {
     store: Store
     scanner: Scanner

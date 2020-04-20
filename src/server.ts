@@ -10,6 +10,10 @@ import { Election } from '@votingworks/ballot-encoder'
 import SystemImporter, { Importer } from './importer'
 import Store from './store'
 import { FujitsuScanner, Scanner } from './scanner'
+import SummaryBallotInterpreter, { Interpreter } from './interpreter'
+import HMPBInterpreter from './hmpbInterpreter'
+
+import { Dictionary } from './types'
 
 export interface AppOptions {
   store: Store
@@ -95,6 +99,11 @@ export interface StartOptions {
   app: Application
 }
 
+const interpreters: Dictionary<Interpreter> = {
+  summary: new SummaryBallotInterpreter(),
+  hmpb: new HMPBInterpreter(),
+}
+
 /**
  * Starts the server with all the default options.
  */
@@ -102,7 +111,13 @@ export async function start({
   port = process.env.PORT || 3002,
   store = new Store(path.join(__dirname, '..', 'cvrs.db')),
   scanner = new FujitsuScanner(),
-  importer = new SystemImporter({ store, scanner }),
+  importer = new SystemImporter({
+    store,
+    scanner,
+    interpreter:
+      interpreters[process.env.INTERPRETER || 'summary'] ||
+      interpreters['summary'],
+  }),
   app = buildApp({ importer, store }),
 }: Partial<StartOptions> = {}) {
   await store.init()

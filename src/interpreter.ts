@@ -39,7 +39,7 @@ interface InterpretBallotStringParams {
   readonly encodedBallot: Uint8Array
 }
 
-function ballotToCastVoteRecord(
+export function ballotToCastVoteRecord(
   ballot: CompletedBallot
 ): CastVoteRecord | undefined {
   // TODO: Replace all this with a `CompletedBallot` -> `CastVoteRecord` mapper.
