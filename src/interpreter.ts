@@ -23,7 +23,7 @@ import {
 import { detect as qrdetect } from '@votingworks/qrdetect'
 import makeDebug from 'debug'
 import { decode as decodeJpeg } from 'jpeg-js'
-import { decode as quircDecode } from 'node-quirc'
+import sharp from 'sharp'
 import { CastVoteRecord } from './types'
 import { getMachineId } from './util/machineId'
 
@@ -147,22 +147,51 @@ interface BallotImageData {
   qrcode: Buffer
 }
 
+async function getQRCode(
+  data: Buffer,
+  width: number,
+  height: number
+): Promise<Buffer | undefined> {
+  const qrdetectCodes = qrdetect(data, width, height)
+
+  if (qrdetectCodes.length > 0) {
+    return qrdetectCodes[0].data
+  }
+}
+
 export async function getBallotImageData(
   file: Buffer,
   filename: string
 ): Promise<BallotImageData> {
   const { data, width, height } = decodeJpeg(file)
   const image = { data: Uint8ClampedArray.from(data), width, height }
-  const [quircCode] = await quircDecode(file)
 
-  if (quircCode && 'data' in quircCode) {
-    return { file, image, qrcode: quircCode.data }
+  const clipHeight = Math.floor(height / 4)
+  const topData = await sharp(file)
+    .extract({ left: 0, top: 0, width: width, height: clipHeight })
+    .raw()
+    .ensureAlpha()
+    .toBuffer()
+  const topQrcode = await getQRCode(topData, width, clipHeight)
+
+  if (topQrcode) {
+    return { file, image, qrcode: topQrcode }
   }
 
-  const qrdetectCodes = qrdetect(data, width, height)
+  const bottomData = await sharp(file)
+    .extract({
+      left: 0,
+      top: height - clipHeight,
+      width: width,
+      height: clipHeight,
+    })
+    .raw()
+    .ensureAlpha()
+    .toBuffer()
+  const bottomQrcode = await getQRCode(bottomData, width, clipHeight)
 
-  if (qrdetectCodes.length > 0) {
-    return { file, image, qrcode: qrdetectCodes[0].data }
+  if (bottomQrcode) {
+    return { file, image, qrcode: bottomQrcode }
   }
 
   throw new Error(`no QR code found in ${filename}`)
