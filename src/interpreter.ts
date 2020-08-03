@@ -24,6 +24,7 @@ import { detect as qrdetect } from '@votingworks/qrdetect'
 import makeDebug from 'debug'
 import { decode as decodeJpeg } from 'jpeg-js'
 import sharp from 'sharp'
+import { decode as quircDecode } from 'node-quirc'
 import { CastVoteRecord } from './types'
 import { getMachineId } from './util/machineId'
 
@@ -148,11 +149,18 @@ interface BallotImageData {
 }
 
 async function getQRCode(
-  data: Buffer,
+  encodedImageData: Buffer,
+  decodedImageData: Buffer,
   width: number,
   height: number
 ): Promise<Buffer | undefined> {
-  const qrdetectCodes = qrdetect(data, width, height)
+  const [quircCode] = await quircDecode(encodedImageData)
+
+  if (quircCode && 'data' in quircCode) {
+    return quircCode.data
+  }
+
+  const qrdetectCodes = qrdetect(decodedImageData, width, height)
 
   if (qrdetectCodes.length > 0) {
     return qrdetectCodes[0].data
@@ -167,28 +175,31 @@ export async function getBallotImageData(
   const image = { data: Uint8ClampedArray.from(data), width, height }
 
   const clipHeight = Math.floor(height / 4)
-  const topData = await sharp(file)
-    .extract({ left: 0, top: 0, width: width, height: clipHeight })
+  const topCrop = sharp(file)
+    .extract({ left: 0, top: 0, width, height: clipHeight })
     .raw()
     .ensureAlpha()
-    .toBuffer()
-  const topQrcode = await getQRCode(topData, width, clipHeight)
+
+  const topData = await topCrop.toBuffer()
+  const topPng = await topCrop.png().toBuffer()
+  const topQrcode = await getQRCode(topPng, topData, width, clipHeight)
 
   if (topQrcode) {
     return { file, image, qrcode: topQrcode }
   }
 
-  const bottomData = await sharp(file)
+  const bottomCrop = sharp(file)
     .extract({
       left: 0,
       top: height - clipHeight,
-      width: width,
+      width,
       height: clipHeight,
     })
     .raw()
     .ensureAlpha()
-    .toBuffer()
-  const bottomQrcode = await getQRCode(bottomData, width, clipHeight)
+  const bottomData = await bottomCrop.toBuffer()
+  const bottomPng = await bottomCrop.png().toBuffer()
+  const bottomQrcode = await getQRCode(bottomPng, bottomData, width, clipHeight)
 
   if (bottomQrcode) {
     return { file, image, qrcode: bottomQrcode }
