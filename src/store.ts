@@ -509,6 +509,36 @@ export default class Store {
     return row
   }
 
+  public async getBallotRequiresAdjudication(ballotId: number): Promise<boolean | undefined> {
+    const election = await this.getElection()
+
+    if (!election) {
+      return
+    }
+
+    const row = await this.dbGetAsync<
+	      | {
+		requiresAdjudication: boolean
+              }
+	      | undefined,
+	  [number]
+    >(
+      `
+        select
+          requires_adjudication as requiresAdjudication
+        from ballots
+        where id = ?
+      `,
+      ballotId
+    )
+
+    if (!row) {
+      return
+    }
+
+    return row.requiresAdjudication
+  }
+
   public async getBallot(ballotId: number): Promise<ReviewBallot | undefined> {
     const election = await this.getElection()
 

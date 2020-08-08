@@ -9,7 +9,7 @@ import * as fsExtra from 'fs-extra'
 import { Election } from '@votingworks/ballot-encoder'
 import { BallotPageLayout } from '@votingworks/hmpb-interpreter'
 
-import { BallotMetadata, ScanStatus } from './types'
+import { BallotMetadata, ScanStatus, ProblemBallot } from './types'
 import Store from './store'
 import DefaultInterpreter, {
   Interpreter,
@@ -38,6 +38,9 @@ export interface Importer {
   configure(newElection: Election): Promise<void>
   doExport(): Promise<string>
   doImport(): Promise<void>
+  doOneAtATimeImport(): Promise<number>
+  doContinueImport(): void
+  doStopImport(): void
   doZero(): Promise<void>
   importFile(
     batchId: number,
@@ -74,6 +77,9 @@ export default class SystemImporter implements Importer {
   ) => void)[] = []
   private timeouts: ReturnType<typeof setTimeout>[] = []
   private imports: Promise<void>[] = []
+  private importing = false
+  private problemBallots : ProblemBallot[] = []
+  private totalNumProblemBallots: number = 0
 
   private seenBallotImagePaths = new Set<string>()
 
@@ -199,11 +205,12 @@ export default class SystemImporter implements Importer {
     this.watcher = chokidar.watch(this.ballotImagesPath, {
       persistent: true,
       awaitWriteFinish: {
-        stabilityThreshold: 2000,
-        pollInterval: 200,
+        stabilityThreshold: 200,
+        pollInterval: 100,
       },
     })
     this.watcher.on('add', async (addedPath) => {
+      console.log("watching", addedPath)
       debug('starting import task (%s)', addedPath)
       const importTask = this.fileAdded(addedPath)
       this.imports.push(importTask)
@@ -213,7 +220,7 @@ export default class SystemImporter implements Importer {
       } catch (error) {
         debug('import task failed (%s): %s', addedPath, error.stack)
       } finally {
-        this.imports = this.imports.filter((it) => it === importTask)
+        this.imports = this.imports.filter((it) => it !== importTask)
       }
     })
   }
@@ -291,7 +298,16 @@ export default class SystemImporter implements Importer {
 
     const batchId = parseInt(batchIdMatch[1], 10)
 
-    await this.importFile(batchId, ballotImagePath, undefined)
+    const ballotId = await this.importFile(batchId, ballotImagePath, undefined)
+    console.log("imported ballot", ballotId)
+
+    if (ballotId) {
+      const requiresAdjudication = await this.store.getBallotRequiresAdjudication(ballotId)
+      if (requiresAdjudication) {
+	this.totalNumProblemBallots += 1
+	this.problemBallots.push({ballotId, ballotSeq: this.totalNumProblemBallots})
+      }
+    }
   }
 
   public async importFile(
@@ -367,18 +383,18 @@ export default class SystemImporter implements Importer {
     await fsExtra.writeFile(
       normalizedBallotImagePath,
       normalizedImage
-        ? await sharp(Buffer.from(normalizedImage.data.buffer), {
-            raw: {
-              width: normalizedImage.width,
-              height: normalizedImage.height,
-              channels: (normalizedImage.data.length /
-                (normalizedImage.width *
-                  normalizedImage.height)) as Raw['channels'],
-            },
-          })
-            .png()
-            .toBuffer()
-        : ballotImageFile
+      ? await sharp(Buffer.from(normalizedImage.data.buffer), {
+        raw: {
+          width: normalizedImage.width,
+          height: normalizedImage.height,
+          channels: (normalizedImage.data.length /
+            (normalizedImage.width *
+              normalizedImage.height)) as Raw['channels'],
+        },
+      })
+        .png()
+        .toBuffer()
+      : ballotImageFile
     )
 
     return ballotId
@@ -433,7 +449,6 @@ export default class SystemImporter implements Importer {
     const batchId = await this.store.addBatch()
 
     try {
-      // trigger a scan
       await this.scanner.scanInto(this.ballotImagesPath, `batch-${batchId}-`)
     } catch (err) {
       // node couldn't execute the command
@@ -448,6 +463,76 @@ export default class SystemImporter implements Importer {
     this.timeouts.push(timeout)
   }
 
+  private oneAtATimeImportFinished(batchId: number) {
+    console.log("OAAT import finished")
+    this.store.finishBatch(batchId)
+  }
+
+  private scheduleDoScanOne(timeout = 100) {
+    setTimeout(() => {
+      this.doScanOne()
+    }, timeout)
+  }
+  
+  private doScanOne() {
+    if (this.problemBallots.length > 0) {
+      // schedule the next check
+      this.scheduleDoScanOne()
+      return
+    }
+    
+    if (this.imports.length > 0) {
+      this.importing = true
+      this.scheduleDoScanOne()
+      return
+    }
+
+    if (!this.importing) {
+      this.scheduleDoScanOne()
+      return
+    }
+
+    this.importing = false
+
+    if (this.scanner.scanOne()) {
+      this.scheduleDoScanOne()
+    }
+  }
+  
+  /**
+   * Create a new batch and scan as many images as we can into it.
+   */
+  public async doOneAtATimeImport(): Promise<number> {
+    const election = await this.store.getElection()
+
+    if (!election) {
+      throw new Error('no election configuration')
+    }
+
+    const batchId = await this.store.addBatch()
+
+    try {
+      console.log("beginning scan")
+      this.scanner.beginScan(this.ballotImagesPath, `batch-${batchId}-`, () => {
+	this.oneAtATimeImportFinished(batchId)
+      })
+      this.scanner.scanOne()
+      this.scheduleDoScanOne()
+      return batchId
+    } catch (err) {
+      // node couldn't execute the command
+      throw new Error(`problem scanning: ${err.message}`)
+    }
+  }
+
+  public doContinueImport() {
+    this.problemBallots = []
+  }
+
+  public doStopImport() {
+    this.scanner.scanStop()
+  }
+  
   /**
    * Export the current CVRs to a string.
    */
@@ -471,6 +556,7 @@ export default class SystemImporter implements Importer {
     fsExtra.emptyDirSync(this.ballotImagesPath)
     fsExtra.emptyDirSync(this.importedBallotImagesPath)
     this.manualBatchId = undefined
+    this.totalNumProblemBallots = 0
   }
 
   /**
@@ -480,10 +566,20 @@ export default class SystemImporter implements Importer {
     const election = await this.store.getElection()
     const batches = await this.store.batchStatus()
     const adjudication = await this.store.adjudicationStatus()
-    if (election) {
-      return { electionHash: 'hashgoeshere', batches, adjudication }
+
+    // hack no adjudication
+    // adjudication.adjudicated = 0
+    // adjudication.remaining = 0
+    
+    // hack adjust CVRs
+    if (batches[0]) {
+      batches[0].count -= (this.totalNumProblemBallots * 2)
     }
-    return { batches, adjudication }
+    
+    if (election) {
+      return { electionHash: 'hashgoeshere', batches, adjudication, problemBallots: this.problemBallots}
+    }
+    return { batches, adjudication , problemBallots: this.problemBallots}
   }
 
   /**

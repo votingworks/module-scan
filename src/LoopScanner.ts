@@ -53,4 +53,15 @@ export default class LoopScanner implements Scanner {
       join(directory, prefix ? `${prefix}-${id + 1}${ext}` : `${id + 1}${ext}`)
     )
   }
+
+  public beginScan(directory: string, prefix?: string) {
+    console.log(directory, prefix || 'no prefix')
+  }
+
+  public scanOne() {
+    return false
+  }
+
+  public scanStop() {
+  }
 }

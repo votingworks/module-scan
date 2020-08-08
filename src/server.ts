@@ -89,13 +89,24 @@ export function buildApp({ store, importer }: AppOptions): Application {
 
   app.post('/scan/scanBatch', async (_request, response) => {
     try {
-      await importer.doImport()
-      response.json({ status: 'ok' })
+      //await importer.doImport()
+      const batchId = await importer.doOneAtATimeImport()
+      response.json({ status: 'ok', batchId: batchId.toString() })
     } catch (err) {
       response.json({ status: `could not scan: ${err.message}` })
     }
   })
 
+  app.post('/scan/scanContinue', async(_request, response) => {
+    importer.doContinueImport()
+    response.json({status: 'ok'})
+  })
+
+  app.post('/scan/scanStop', async(_request, response) => {
+    importer.doStopImport()
+    response.json({status: 'ok'})
+  })
+  
   if (process.env.NODE_ENV !== 'production') {
     app.post(
       '/scan/scanFiles',
