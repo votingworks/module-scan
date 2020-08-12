@@ -78,8 +78,8 @@ export default class SystemImporter implements Importer {
   private timeouts: ReturnType<typeof setTimeout>[] = []
   private imports: Promise<void>[] = []
   private importing = false
-  private problemBallots : ProblemBallot[] = []
-  private totalNumProblemBallots: number = 0
+  private problemBallots: ProblemBallot[] = []
+  private totalNumProblemBallots = 0
 
   private seenBallotImagePaths = new Set<string>()
 
@@ -210,7 +210,7 @@ export default class SystemImporter implements Importer {
       },
     })
     this.watcher.on('add', async (addedPath) => {
-      console.log("watching", addedPath)
+      console.log('watching', addedPath)
       debug('starting import task (%s)', addedPath)
       const importTask = this.fileAdded(addedPath)
       this.imports.push(importTask)
@@ -299,13 +299,18 @@ export default class SystemImporter implements Importer {
     const batchId = parseInt(batchIdMatch[1], 10)
 
     const ballotId = await this.importFile(batchId, ballotImagePath, undefined)
-    console.log("imported ballot", ballotId)
+    console.log('imported ballot', ballotId)
 
     if (ballotId) {
-      const requiresAdjudication = await this.store.getBallotRequiresAdjudication(ballotId)
-      if (requiresAdjudication) {
-	this.totalNumProblemBallots += 1
-	this.problemBallots.push({ballotId, ballotSeq: this.totalNumProblemBallots})
+      const problemBallotInfo = await this.store.getProblemBallotInfo(ballotId)
+      if (problemBallotInfo?.requiresAdjudication) {
+        this.totalNumProblemBallots += 1
+        this.problemBallots.push({
+          ballotId,
+          ballotSeq: this.totalNumProblemBallots,
+          ballotStyleId: problemBallotInfo.ballotStyleId,
+          precinctId: problemBallotInfo.precinctId,
+        })
       }
     }
   }
@@ -383,18 +388,18 @@ export default class SystemImporter implements Importer {
     await fsExtra.writeFile(
       normalizedBallotImagePath,
       normalizedImage
-      ? await sharp(Buffer.from(normalizedImage.data.buffer), {
-        raw: {
-          width: normalizedImage.width,
-          height: normalizedImage.height,
-          channels: (normalizedImage.data.length /
-            (normalizedImage.width *
-              normalizedImage.height)) as Raw['channels'],
-        },
-      })
-        .png()
-        .toBuffer()
-      : ballotImageFile
+        ? await sharp(Buffer.from(normalizedImage.data.buffer), {
+            raw: {
+              width: normalizedImage.width,
+              height: normalizedImage.height,
+              channels: (normalizedImage.data.length /
+                (normalizedImage.width *
+                  normalizedImage.height)) as Raw['channels'],
+            },
+          })
+            .png()
+            .toBuffer()
+        : ballotImageFile
     )
 
     return ballotId
@@ -463,24 +468,24 @@ export default class SystemImporter implements Importer {
     this.timeouts.push(timeout)
   }
 
-  private oneAtATimeImportFinished(batchId: number) {
-    console.log("OAAT import finished")
+  private oneAtATimeImportFinished(batchId: number): void {
+    console.log('OAAT import finished')
     this.store.finishBatch(batchId)
   }
 
-  private scheduleDoScanOne(timeout = 100) {
+  private scheduleDoScanOne(timeout = 100): void {
     setTimeout(() => {
       this.doScanOne()
     }, timeout)
   }
-  
-  private doScanOne() {
+
+  private doScanOne(): void {
     if (this.problemBallots.length > 0) {
       // schedule the next check
       this.scheduleDoScanOne()
       return
     }
-    
+
     if (this.imports.length > 0) {
       this.importing = true
       this.scheduleDoScanOne()
@@ -498,7 +503,7 @@ export default class SystemImporter implements Importer {
       this.scheduleDoScanOne()
     }
   }
-  
+
   /**
    * Create a new batch and scan as many images as we can into it.
    */
@@ -512,9 +517,9 @@ export default class SystemImporter implements Importer {
     const batchId = await this.store.addBatch()
 
     try {
-      console.log("beginning scan")
+      console.log('beginning scan')
       this.scanner.beginScan(this.ballotImagesPath, `batch-${batchId}-`, () => {
-	this.oneAtATimeImportFinished(batchId)
+        this.oneAtATimeImportFinished(batchId)
       })
       this.scanner.scanOne()
       this.scheduleDoScanOne()
@@ -525,14 +530,14 @@ export default class SystemImporter implements Importer {
     }
   }
 
-  public doContinueImport() {
+  public doContinueImport(): void {
     this.problemBallots = []
   }
 
-  public doStopImport() {
+  public doStopImport(): void {
     this.scanner.scanStop()
   }
-  
+
   /**
    * Export the current CVRs to a string.
    */
@@ -570,16 +575,21 @@ export default class SystemImporter implements Importer {
     // hack no adjudication
     // adjudication.adjudicated = 0
     // adjudication.remaining = 0
-    
+
     // hack adjust CVRs
     if (batches[0]) {
-      batches[0].count -= (this.totalNumProblemBallots * 2)
+      batches[0].count -= this.totalNumProblemBallots * 2
     }
-    
+
     if (election) {
-      return { electionHash: 'hashgoeshere', batches, adjudication, problemBallots: this.problemBallots}
+      return {
+        electionHash: 'hashgoeshere',
+        batches,
+        adjudication,
+        problemBallots: this.problemBallots,
+      }
     }
-    return { batches, adjudication , problemBallots: this.problemBallots}
+    return { batches, adjudication, problemBallots: this.problemBallots }
   }
 
   /**

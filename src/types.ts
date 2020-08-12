@@ -32,6 +32,8 @@ extends Dictionary<string | string[] | boolean | number | BallotLocales> {
 export interface ProblemBallot {
   ballotId: number
   ballotSeq: number
+  ballotStyleId: string
+  precinctId: string
 }
 
 export interface ScanStatus {

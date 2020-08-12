@@ -509,7 +509,16 @@ export default class Store {
     return row
   }
 
-  public async getBallotRequiresAdjudication(ballotId: number): Promise<boolean | undefined> {
+  public async getProblemBallotInfo(
+    ballotId: number
+  ): Promise<
+    | {
+        requiresAdjudication: boolean
+        ballotStyleId: string
+        precinctId: string
+      }
+    | undefined
+  > {
     const election = await this.getElection()
 
     if (!election) {
@@ -517,15 +526,19 @@ export default class Store {
     }
 
     const row = await this.dbGetAsync<
-	      | {
-		requiresAdjudication: boolean
-              }
-	      | undefined,
-	  [number]
+      | {
+          requiresAdjudication: boolean
+          ballotStyleId: string
+          precinctId: string
+        }
+      | undefined,
+      [number]
     >(
       `
         select
-          requires_adjudication as requiresAdjudication
+          requires_adjudication as requiresAdjudication,
+          json_extract(metadata_json, '$.ballotStyleId') as ballotStyleId,
+          json_extract(metadata_json, '$.precinctId') as precinctId,
         from ballots
         where id = ?
       `,
@@ -536,7 +549,7 @@ export default class Store {
       return
     }
 
-    return row.requiresAdjudication
+    return row
   }
 
   public async getBallot(ballotId: number): Promise<ReviewBallot | undefined> {
