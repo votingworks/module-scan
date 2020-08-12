@@ -538,7 +538,7 @@ export default class Store {
         select
           requires_adjudication as requiresAdjudication,
           json_extract(metadata_json, '$.ballotStyleId') as ballotStyleId,
-          json_extract(metadata_json, '$.precinctId') as precinctId,
+          json_extract(metadata_json, '$.precinctId') as precinctId
         from ballots
         where id = ?
       `,
