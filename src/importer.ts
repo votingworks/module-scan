@@ -573,14 +573,9 @@ export default class SystemImporter implements Importer {
     const adjudication = await this.store.adjudicationStatus()
 
     // hack no adjudication
-    // adjudication.adjudicated = 0
-    // adjudication.remaining = 0
-
-    // hack adjust CVRs
-    if (batches[0]) {
-      batches[0].count -= this.totalNumProblemBallots * 2
-    }
-
+    adjudication.adjudicated = 0
+    adjudication.remaining = 0
+    
     if (election) {
       return {
         electionHash: 'hashgoeshere',
