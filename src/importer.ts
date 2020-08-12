@@ -39,8 +39,8 @@ export interface Importer {
   doExport(): Promise<string>
   doImport(): Promise<void>
   doOneAtATimeImport(): Promise<number>
-  doContinueImport(): void
-  doStopImport(): void
+  doContinueImport(): Promise<void>
+  doStopImport(): Promise<void>
   doZero(): Promise<void>
   importFile(
     batchId: number,
@@ -79,6 +79,7 @@ export default class SystemImporter implements Importer {
   private imports: Promise<void>[] = []
   private importing = false
   private problemBallots: ProblemBallot[] = []
+  private recentlyScannedBallotIds: number[] = []
   private totalNumProblemBallots = 0
 
   private seenBallotImagePaths = new Set<string>()
@@ -302,6 +303,7 @@ export default class SystemImporter implements Importer {
     console.log('imported ballot', ballotId)
 
     if (ballotId) {
+      this.recentlyScannedBallotIds.push(ballotId)
       const problemBallotInfo = await this.store.getProblemBallotInfo(ballotId)
       if (problemBallotInfo?.requiresAdjudication) {
         this.totalNumProblemBallots += 1
@@ -479,7 +481,7 @@ export default class SystemImporter implements Importer {
     }, timeout)
   }
 
-  private doScanOne(): void {
+  private async doScanOne(): Promise<void> {
     if (this.problemBallots.length > 0) {
       // schedule the next check
       this.scheduleDoScanOne()
@@ -498,8 +500,9 @@ export default class SystemImporter implements Importer {
     }
 
     this.importing = false
+    this.recentlyScannedBallotIds = []
 
-    if (this.scanner.scanOne()) {
+    if (await this.scanner.scanOne()) {
       this.scheduleDoScanOne()
     }
   }
@@ -521,7 +524,7 @@ export default class SystemImporter implements Importer {
       this.scanner.beginScan(this.ballotImagesPath, `batch-${batchId}-`, () => {
         this.oneAtATimeImportFinished(batchId)
       })
-      this.scanner.scanOne()
+      await this.scanner.scanOne()
       this.scheduleDoScanOne()
       return batchId
     } catch (err) {
@@ -530,12 +533,19 @@ export default class SystemImporter implements Importer {
     }
   }
 
-  public doContinueImport(): void {
+  public async doContinueImport(): Promise<void> {
+    const { recentlyScannedBallotIds } = this
+    this.recentlyScannedBallotIds = []
     this.problemBallots = []
+    debug(
+      'deleting ballots from last scanned page: %o',
+      recentlyScannedBallotIds
+    )
+    await this.store.deleteBallots(recentlyScannedBallotIds)
   }
 
-  public doStopImport(): void {
-    this.scanner.scanStop()
+  public async doStopImport(): Promise<void> {
+    await this.scanner.scanStop()
   }
 
   /**
@@ -575,7 +585,7 @@ export default class SystemImporter implements Importer {
     // hack no adjudication
     adjudication.adjudicated = 0
     adjudication.remaining = 0
-    
+
     if (election) {
       return {
         electionHash: 'hashgoeshere',

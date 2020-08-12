@@ -19,7 +19,7 @@ export interface Dictionary<T> {
 }
 
 export interface CastVoteRecord
-extends Dictionary<string | string[] | boolean | number | BallotLocales> {
+  extends Dictionary<string | string[] | boolean | number | BallotLocales> {
   _precinctId: string
   _ballotStyleId: string
   _ballotId: string
@@ -84,13 +84,13 @@ export interface HmpbTemplateInfo {
 }
 
 export type BallotMetadata = Omit<
-BallotPageMetadata,
-'pageNumber' | 'pageCount'
+  BallotPageMetadata,
+  'pageNumber' | 'pageCount'
 >
 
 export type SerializableBallotPageLayout = Omit<
-BallotPageLayout,
-'ballotImage'
+  BallotPageLayout,
+  'ballotImage'
 > & {
   ballotImage: Omit<BallotPageLayout['ballotImage'], 'imageData'>
 }

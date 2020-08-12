@@ -836,6 +836,18 @@ export default class Store {
   }
 
   /**
+   * Deletes ballots by id.
+   */
+  public async deleteBallots(ballotIds: readonly number[]): Promise<void> {
+    await this.dbRunAsync(
+      `delete from ballots where id in (${ballotIds
+        .map(() => '?')
+        .join(', ')})`,
+      ...ballotIds
+    )
+  }
+
+  /**
    * Gets all batches, including their CVR count.
    */
   public async batchStatus(): Promise<BatchInfo[]> {

@@ -97,16 +97,16 @@ export function buildApp({ store, importer }: AppOptions): Application {
     }
   })
 
-  app.post('/scan/scanContinue', async(_request, response) => {
-    importer.doContinueImport()
-    response.json({status: 'ok'})
+  app.post('/scan/scanContinue', async (_request, response) => {
+    await importer.doContinueImport()
+    response.json({ status: 'ok' })
   })
 
-  app.post('/scan/scanStop', async(_request, response) => {
-    importer.doStopImport()
-    response.json({status: 'ok'})
+  app.post('/scan/scanStop', async (_request, response) => {
+    await importer.doStopImport()
+    response.json({ status: 'ok' })
   })
-  
+
   if (process.env.NODE_ENV !== 'production') {
     app.post(
       '/scan/scanFiles',

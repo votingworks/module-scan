@@ -54,14 +54,15 @@ export default class LoopScanner implements Scanner {
     )
   }
 
-  public beginScan(directory: string, prefix?: string) {
+  public beginScan(directory: string, prefix?: string): void {
     console.log(directory, prefix || 'no prefix')
   }
 
-  public scanOne() {
+  public async scanOne(): Promise<boolean> {
     return false
   }
 
-  public scanStop() {
+  public async scanStop(): Promise<void> {
+    // nothing to do
   }
 }

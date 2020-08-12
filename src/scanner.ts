@@ -1,5 +1,5 @@
 import { join } from 'path'
-import {ChildProcess, execFile as originalExecFile} from 'child_process'
+import { ChildProcess, execFile as originalExecFile } from 'child_process'
 import execFile from './exec'
 import makeDebug from 'debug'
 
@@ -9,9 +9,13 @@ type ScanFinishedCallback = () => void
 
 export interface Scanner {
   scanInto(directory: string, prefix?: string): Promise<void>
-  beginScan(directory: string, prefix?: string, callback?: ScanFinishedCallback): void
-  scanOne(): boolean
-  scanStop(): void
+  beginScan(
+    directory: string,
+    prefix?: string,
+    callback?: ScanFinishedCallback
+  ): void
+  scanOne(): Promise<boolean>
+  scanStop(): Promise<void>
 }
 
 function zeroPad(number: number, maxLength = 2): string {
@@ -36,9 +40,9 @@ export enum ScannerImageFormat {
  * Scans duplex images in batch mode from a Fujitsu scanner.
  */
 export class FujitsuScanner implements Scanner {
-  private scanProcess : ChildProcess | undefined
+  private scanProcess: ChildProcess | undefined
   private scanFinishedCallback: ScanFinishedCallback | undefined
-  
+
   public constructor(private format = ScannerImageFormat.PNG) {}
 
   public async scanInto(directory: string, prefix = ''): Promise<void> {
@@ -73,19 +77,23 @@ export class FujitsuScanner implements Scanner {
     } catch (error) {
       debug('scanimage failed with error: %s', error.message)
       throw error
-    }	
+    }
   }
 
-  private scanProcessExited() {
-    console.log("scan process exited")
+  private scanProcessExited(): void {
+    console.log('scan process exited')
     this.scanProcess = undefined
     if (this.scanFinishedCallback) {
       this.scanFinishedCallback()
       this.scanFinishedCallback = undefined
     }
   }
-  
-  public beginScan(directory: string, prefix = '', callback : ScanFinishedCallback) {
+
+  public beginScan(
+    directory: string,
+    prefix = '',
+    callback: ScanFinishedCallback
+  ): void {
     const args = [
       '-d',
       'fujitsu',
@@ -99,30 +107,42 @@ export class FujitsuScanner implements Scanner {
       'Red',
       `--batch=${join(
         directory,
-      `${prefix}${dateStamp()}-ballot-%04d.${this.format}`
+        `${prefix}${dateStamp()}-ballot-%04d.${this.format}`
       )}`,
       '--batch-prompt',
     ]
 
     this.scanFinishedCallback = callback
-    this.scanProcess = originalExecFile('scanimage', args, () => this.scanProcessExited())
+    this.scanProcess = originalExecFile('scanimage', args, () =>
+      this.scanProcessExited()
+    )
   }
 
-  public scanOne() : boolean {
-    if (!this.scanProcess || !this.scanProcess.stdin) {
+  public async scanOne(): Promise<boolean> {
+    const stdin = this.scanProcess?.stdin
+    if (!stdin) {
       return false
     }
 
-    this.scanProcess.stdin.write('\n')
-    this.scanProcess.stdin.write('\n')
-    return true
+    return new Promise((resolve, reject) => {
+      stdin.write('\n\n', (error) => {
+        if (error) {
+          reject(error)
+        } else {
+          resolve(true)
+        }
+      })
+    })
   }
 
-  public scanStop() {
-    if (!this.scanProcess || !this.scanProcess.stdin) {
+  public async scanStop(): Promise<void> {
+    const stdin = this.scanProcess?.stdin
+    if (!stdin) {
       return
     }
 
-    this.scanProcess.stdin.end()
+    return new Promise((resolve) => {
+      stdin.end(resolve)
+    })
   }
 }
