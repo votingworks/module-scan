@@ -213,7 +213,7 @@ export default class SystemImporter implements Importer {
       } catch (error) {
         debug('import task failed (%s): %s', addedPath, error.stack)
       } finally {
-        this.imports = this.imports.filter((it) => it === importTask)
+        this.imports = this.imports.filter((it) => it !== importTask)
       }
     })
   }
