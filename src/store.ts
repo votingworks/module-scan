@@ -237,6 +237,36 @@ export default class Store {
       )`
     )
     await this.dbRunAsync(
+      `create table if not exists ballot_cards (
+        id varchar(36) primary key,
+        batch_id varchar(36),
+        created_at datetime default current_timestamp not null,
+
+        front_original_filename text unique,
+        front_normalized_filename text unique,
+        front_marks_json text,
+        front_cvr_json text,
+        front_metadata_json text,
+        front_adjudication_json text,
+        front_adjudication_info_json text,
+        front_requires_adjudication boolean,
+
+        back_original_filename text unique,
+        back_normalized_filename text unique,
+        back_marks_json text,
+        back_cvr_json text,
+        back_metadata_json text,
+        back_adjudication_json text,
+        back_adjudication_info_json text,
+        back_requires_adjudication boolean,
+
+        foreign key (batch_id)
+        references batches (id)
+          on update cascade
+          on delete cascade
+      )`
+    )
+    await this.dbRunAsync(
       `create table if not exists configs (
         key varchar(255) unique,
         value text
@@ -376,12 +406,206 @@ export default class Store {
     )
   }
 
-  public async addBallotCard(batchId: string): Promise<string> {
-    const id = uuid()
-    await this.dbRunAsync(
-      'insert into ballot_cards (id, batch_id) values (?, ?)',
-      id,
-      batchId
+  public async addBallotCard(
+    batchId: string,
+    frontOriginalFilename: string,
+    frontNormalizedFilename: string,
+    frontInterpreted: InterpretedBallot,
+    backOriginalFilename: string,
+    backNormalizedFilename: string,
+    backInterpreted: InterpretedBallot
+  ): Promise<string> {
+    const frontCvr =
+      'cvr' in frontInterpreted ? frontInterpreted.cvr : undefined
+    const backCvr = 'cvr' in backInterpreted ? backInterpreted.cvr : undefined
+    const frontMarkInfo =
+      'markInfo' in frontInterpreted ? frontInterpreted.markInfo : undefined
+    const backMarkInfo =
+      'markInfo' in backInterpreted ? backInterpreted.markInfo : undefined
+    const frontMetadata =
+      'metadata' in frontInterpreted ? frontInterpreted.metadata : undefined
+    const backMetadata =
+      'metadata' in backInterpreted ? backInterpreted.metadata : undefined
+
+    const frontCanBeAdjudicated =
+      frontInterpreted.type === 'InterpretedHmpbBallot' ||
+      frontInterpreted.type === 'UninterpretedHmpbBallot'
+    const backCanBeAdjudicated =
+      backInterpreted.type === 'InterpretedHmpbBallot' ||
+      backInterpreted.type === 'UninterpretedHmpbBallot'
+    let frontRequiresAdjudication = false
+    let backRequiresAdjudication = false
+    let frontAdjudicationInfo: AdjudicationInfo | undefined
+    let backAdjudicationInfo: AdjudicationInfo | undefined
+
+    if (frontCanBeAdjudicated) {
+      const contests = frontMarkInfo?.marks.reduce<Contests>(
+        (contests, { contest }) =>
+          contest && contests.every(({ id }) => contest.id !== id)
+            ? [...contests, contest]
+            : contests,
+        []
+      )
+      const election = await this.getElection()
+      frontAdjudicationInfo = {
+        enabledReasons: election?.adjudicationReasons ?? [
+          AdjudicationReason.UninterpretableBallot,
+          AdjudicationReason.MarginalMark,
+        ],
+        allReasonInfos: [
+          ...ballotAdjudicationReasons(contests, {
+            optionMarkStatus: (contestId, optionId) => {
+              if (frontMarkInfo?.marks) {
+                for (const mark of frontMarkInfo.marks) {
+                  if (mark.type === 'stray' || mark.contest.id !== contestId) {
+                    continue
+                  }
+
+                  if (
+                    (mark.type === 'candidate' &&
+                      mark.option.id === optionId) ||
+                    (mark.type === 'yesno' && mark.option === optionId)
+                  ) {
+                    return getMarkStatus(mark, election?.markThresholds!)
+                  }
+                }
+              }
+
+              return MarkStatus.Unmarked
+            },
+          }),
+        ],
+      }
+
+      for (const reason of frontAdjudicationInfo.allReasonInfos) {
+        if (frontAdjudicationInfo.enabledReasons.includes(reason.type)) {
+          frontRequiresAdjudication = true
+          debug(
+            'Adjudication required for reason: %s',
+            adjudicationReasonDescription(reason)
+          )
+        } else {
+          debug(
+            'Adjudication reason ignored by configuration: %s',
+            adjudicationReasonDescription(reason)
+          )
+        }
+      }
+    }
+
+    if (backCanBeAdjudicated) {
+      const contests = backMarkInfo?.marks.reduce<Contests>(
+        (contests, { contest }) =>
+          contest && contests.every(({ id }) => contest.id !== id)
+            ? [...contests, contest]
+            : contests,
+        []
+      )
+      const election = await this.getElection()
+      backAdjudicationInfo = {
+        enabledReasons: election?.adjudicationReasons ?? [
+          AdjudicationReason.UninterpretableBallot,
+          AdjudicationReason.MarginalMark,
+        ],
+        allReasonInfos: [
+          ...ballotAdjudicationReasons(contests, {
+            optionMarkStatus: (contestId, optionId) => {
+              if (backMarkInfo?.marks) {
+                for (const mark of backMarkInfo.marks) {
+                  if (mark.type === 'stray' || mark.contest.id !== contestId) {
+                    continue
+                  }
+
+                  if (
+                    (mark.type === 'candidate' &&
+                      mark.option.id === optionId) ||
+                    (mark.type === 'yesno' && mark.option === optionId)
+                  ) {
+                    return getMarkStatus(mark, election?.markThresholds!)
+                  }
+                }
+              }
+
+              return MarkStatus.Unmarked
+            },
+          }),
+        ],
+      }
+
+      for (const reason of backAdjudicationInfo.allReasonInfos) {
+        if (backAdjudicationInfo.enabledReasons.includes(reason.type)) {
+          backRequiresAdjudication = true
+          debug(
+            'Adjudication required for reason: %s',
+            adjudicationReasonDescription(reason)
+          )
+        } else {
+          debug(
+            'Adjudication reason ignored by configuration: %s',
+            adjudicationReasonDescription(reason)
+          )
+        }
+      }
+    }
+
+    try {
+      const id = uuid()
+      await this.dbRunAsync(
+        `insert into ballot_cards
+          (
+            id,
+            batch_id,
+
+            front_original_filename,
+            front_normalized_filename,
+            front_cvr_json,
+            front_marks_json,
+            front_metadata_json,
+            front_requires_adjudication,
+            front_adjudication_info_json,
+
+            back_original_filename,
+            back_normalized_filename,
+            back_cvr_json,
+            back_marks_json,
+            back_metadata_json,
+            back_requires_adjudication,
+            back_adjudication_info_json
+          )
+          values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        id,
+        batchId,
+        frontOriginalFilename,
+        frontNormalizedFilename,
+        JSON.stringify(frontCvr),
+        frontMarkInfo ? JSON.stringify(frontMarkInfo, undefined, 2) : null,
+        frontMetadata ? JSON.stringify(frontMetadata, undefined, 2) : null,
+        frontRequiresAdjudication,
+        frontAdjudicationInfo
+          ? JSON.stringify(frontAdjudicationInfo, undefined, 2)
+          : null,
+        backOriginalFilename,
+        backNormalizedFilename,
+        JSON.stringify(backCvr),
+        backMarkInfo ? JSON.stringify(backMarkInfo, undefined, 2) : null,
+        backMetadata ? JSON.stringify(backMetadata, undefined, 2) : null,
+        backRequiresAdjudication,
+        backAdjudicationInfo
+          ? JSON.stringify(backAdjudicationInfo, undefined, 2)
+          : null
+      )
+    } catch (error) {
+      debug(
+        'ballot insert failed; maybe a duplicate? filenames=(%s, %s)',
+        frontOriginalFilename,
+        backOriginalFilename
+      )
+    }
+
+    const { id } = await this.dbGetAsync(
+      'select id from ballot_cards where front_original_filename = ? and back_original_filename = ?',
+      frontOriginalFilename,
+      backOriginalFilename
     )
     return id
   }

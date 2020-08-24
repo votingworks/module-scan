@@ -4,6 +4,7 @@
 //
 
 import express, { Application, RequestHandler } from 'express'
+import { promises as fs } from 'fs'
 import multer from 'multer'
 import * as path from 'path'
 import SystemImporter, { Importer } from './importer'
@@ -25,7 +26,7 @@ export interface AppOptions {
  */
 export function buildApp({ store, importer }: AppOptions): Application {
   const app: Application = express()
-  const upload = multer({ storage: multer.memoryStorage() })
+  const upload = multer({ storage: multer.diskStorage({}) })
 
   app.use(express.json())
 
@@ -119,16 +120,16 @@ export function buildApp({ store, importer }: AppOptions): Application {
         if (files.length > 0) {
           const batchId = await store.addBatch()
 
-          for (const file of files) {
+          for (let i = 0; i < files.length; i += 2) {
+            const front = files[i].path
+            const back =
+              files[i + 1]?.path ??
+              path.join(__dirname, '../test/fixtures/blank-ballot.png')
             try {
-              await importer.importFile(
-                batchId,
-                `batch-${batchId}-manual-upload-${file.originalname}`,
-                file.buffer
-              )
+              await importer.importBallotCard(batchId, [front, back])
             } catch (error) {
               console.error(
-                `failed to import file ${file.originalname}: ${error.message}`
+                `failed to import ballot card ${i}: front=${front}, back=${back}: ${error.message}`
               )
             }
           }
@@ -203,10 +204,10 @@ export function buildApp({ store, importer }: AppOptions): Application {
           }
 
           const metadata: BallotConfig = JSON.parse(
-            new TextDecoder().decode(metadataFile.buffer)
+            new TextDecoder().decode(await fs.readFile(metadataFile.path))
           )
 
-          await importer.addHmpbTemplates(ballotFile.buffer, {
+          await importer.addHmpbTemplates(await fs.readFile(ballotFile.path), {
             ballotStyleId: metadata.ballotStyleId,
             precinctId: metadata.precinctId,
             isTestBallot: !metadata.isLiveMode,

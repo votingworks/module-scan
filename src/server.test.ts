@@ -158,7 +158,7 @@ test('POST /scan/scanBatch errors', async () => {
 })
 
 test('POST /scan/scanFiles', async () => {
-  importerMock.importFile.mockResolvedValueOnce(undefined)
+  importerMock.importBallotCard.mockResolvedValueOnce(undefined)
   await request(app)
     .post('/scan/scanFiles')
     .attach('files', Buffer.of(), {

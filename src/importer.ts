@@ -43,6 +43,7 @@ export interface Importer {
     ballotImagePath: string,
     ballotImageFile?: Buffer
   ): Promise<string | undefined>
+  importBallotCard(batchId: string, card: Sheet): Promise<string | undefined>
   getStatus(): Promise<ScanStatus>
   restoreConfig(): Promise<void>
   setTestMode(testMode: boolean): Promise<void>
@@ -224,8 +225,10 @@ export default class SystemImporter implements Importer {
     const start = Date.now()
     try {
       debug('cardAdded %o batchId=%d STARTING', card, batchId)
+      // TODO: Remove these `fileAdded` calls and just use `importBallotCard`
       await this.fileAdded(card[0], batchId)
       await this.fileAdded(card[1], batchId)
+      await this.importBallotCard(batchId, card)
     } finally {
       const end = Date.now()
       debug(
@@ -257,6 +260,160 @@ export default class SystemImporter implements Importer {
         Math.round(end - start)
       )
     }
+  }
+
+  public async importBallotCard(
+    batchId: string,
+    card: Sheet
+  ): Promise<string | undefined> {
+    const election = await this.store.getElection()
+
+    if (!election) {
+      return
+    }
+
+    const [frontFilePath, backFilePath] = card
+    const [frontFileData, backFileData] = await Promise.all(
+      card.map((path) => fsExtra.readFile(path))
+    )
+
+    const [frontFileHash, backFileHash] = [
+      frontFileData,
+      backFileData,
+    ].map((data) => createHash('sha256').update(data).digest('hex'))
+
+    const [frontInterpreted, backInterpreted] = await Promise.all(
+      ([
+        [frontFilePath, frontFileData],
+        [backFilePath, backFileData],
+      ] as const).map(([ballotImagePath, ballotImageFile]) =>
+        this.interpreter.interpretFile({
+          election,
+          ballotImagePath,
+          ballotImageFile,
+        })
+      )
+    )
+
+    // TODO: Handle invalid test mode ballots more explicitly.
+    // At some point we want to present information to the user that tells them
+    // there was a ballot that was did not match the test/live mode of the
+    // scanner. For now we just ignore such ballots completely.
+    if (
+      !frontInterpreted ||
+      !backInterpreted ||
+      frontInterpreted.type === 'InvalidTestModeBallot' ||
+      backInterpreted.type === 'InvalidTestModeBallot'
+    ) {
+      return
+    }
+
+    const frontCvr =
+      'cvr' in frontInterpreted ? frontInterpreted.cvr : undefined
+    const backCvr = 'cvr' in backInterpreted ? backInterpreted.cvr : undefined
+    const frontNormalizedImage =
+      'normalizedImage' in frontInterpreted
+        ? frontInterpreted.normalizedImage
+        : undefined
+    const backNormalizedImage =
+      'normalizedImage' in backInterpreted
+        ? backInterpreted.normalizedImage
+        : undefined
+
+    debug(
+      'interpreted ballot card front %s (%s): cvr=%O marks=%O metadata=%O',
+      frontFilePath,
+      frontInterpreted.type,
+      frontCvr,
+      'markInfo' in frontInterpreted ? frontInterpreted.markInfo : undefined,
+      'metadata' in frontInterpreted ? frontInterpreted.metadata : undefined
+    )
+
+    debug(
+      'interpreted ballot card back %s (%s): cvr=%O marks=%O metadata=%O',
+      backFilePath,
+      backInterpreted.type,
+      backCvr,
+      'markInfo' in backInterpreted ? backInterpreted.markInfo : undefined,
+      'metadata' in backInterpreted ? backInterpreted.metadata : undefined
+    )
+
+    const frontFilePathExt = path.extname(frontFilePath)
+    const backFilePathExt = path.extname(backFilePath)
+    const frontOriginalBallotImagePath = path.join(
+      this.importedBallotImagesPath,
+      `${path.basename(
+        frontFilePath,
+        frontFilePathExt
+      )}-${frontFileHash}-original${frontFilePathExt}`
+    )
+    const backOriginalBallotImagePath = path.join(
+      this.importedBallotImagesPath,
+      `${path.basename(
+        backFilePath,
+        backFilePathExt
+      )}-${backFileHash}-original${backFilePathExt}`
+    )
+    const frontNormalizedBallotImagePath = path.join(
+      this.importedBallotImagesPath,
+      `${path.basename(
+        frontFilePath,
+        frontFilePathExt
+      )}-${frontFileHash}-normalized${frontFilePathExt}`
+    )
+    const backNormalizedBallotImagePath = path.join(
+      this.importedBallotImagesPath,
+      `${path.basename(
+        backFilePath,
+        backFilePathExt
+      )}-${backFileHash}-normalized${backFilePathExt}`
+    )
+
+    await fsExtra.copy(frontFilePath, frontOriginalBallotImagePath)
+    await fsExtra.copy(backFilePath, backOriginalBallotImagePath)
+
+    await fsExtra.writeFile(
+      frontNormalizedBallotImagePath,
+      frontNormalizedImage
+        ? await sharp(Buffer.from(frontNormalizedImage.data.buffer), {
+            raw: {
+              width: frontNormalizedImage.width,
+              height: frontNormalizedImage.height,
+              channels: (frontNormalizedImage.data.length /
+                (frontNormalizedImage.width *
+                  frontNormalizedImage.height)) as Raw['channels'],
+            },
+          })
+            .png()
+            .toBuffer()
+        : frontFileData
+    )
+    await fsExtra.writeFile(
+      backNormalizedBallotImagePath,
+      backNormalizedImage
+        ? await sharp(Buffer.from(backNormalizedImage.data.buffer), {
+            raw: {
+              width: backNormalizedImage.width,
+              height: backNormalizedImage.height,
+              channels: (backNormalizedImage.data.length /
+                (backNormalizedImage.width *
+                  backNormalizedImage.height)) as Raw['channels'],
+            },
+          })
+            .png()
+            .toBuffer()
+        : backFileData
+    )
+
+    return await this.store.addBallotCard(
+      batchId,
+      frontOriginalBallotImagePath,
+      frontNormalizedBallotImagePath,
+      frontInterpreted,
+      backOriginalBallotImagePath,
+      backNormalizedBallotImagePath,
+      backInterpreted
+    )
   }
 
   public async importFile(
