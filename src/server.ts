@@ -11,6 +11,7 @@ import * as path from 'path'
 import { inspect } from 'util'
 import backup from './backup'
 import SystemImporter, { Importer } from './importer'
+import SummaryBallotInterpreter from './interpreter'
 import { FujitsuScanner, Scanner } from './scanner'
 import Store, { ALLOWED_CONFIG_KEYS, ConfigKey } from './store'
 import { BallotConfig, ElectionDefinition } from './types'
@@ -491,6 +492,7 @@ export async function start({
       store,
       scanner,
       ...makeTemporaryBallotImportImageDirectories().paths,
+      interpreter: new SummaryBallotInterpreter(),
     })
   app = app ?? buildApp({ importer, store })
   await importer.restoreConfig()

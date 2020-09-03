@@ -102,17 +102,14 @@ export interface UnreadablePage {
 
 export interface Interpreter {
   addHmpbTemplate(
-    election: Election,
     imageData: ImageData,
     metadata?: BallotPageMetadata
   ): Promise<BallotPageLayout>
-  addHmpbTemplate(
-    election: Election,
-    layout: BallotPageLayout
-  ): Promise<BallotPageLayout>
+  addHmpbTemplate(layout: BallotPageLayout): Promise<BallotPageLayout>
   interpretFile(
     interpretFileParams: InterpretFileParams
   ): Promise<InterpretFileResult>
+  setElection(election: Election): void
   setTestMode(testMode: boolean): void
 }
 
@@ -246,21 +243,18 @@ export default class SummaryBallotInterpreter implements Interpreter {
   private hmpbInterpreter?: HMPBInterpreter
   private testMode?: boolean
 
+  public constructor(private election?: Election) {}
+
   async addHmpbTemplate(
-    election: Election,
     imageData: ImageData,
     metadata?: BallotPageMetadata
   ): Promise<BallotPageLayout>
+  async addHmpbTemplate(layout: BallotPageLayout): Promise<BallotPageLayout>
   async addHmpbTemplate(
-    election: Election,
-    layout: BallotPageLayout
-  ): Promise<BallotPageLayout>
-  async addHmpbTemplate(
-    election: Election,
     imageDataOrLayout: ImageData | BallotPageLayout,
     metadata?: BallotPageMetadata
   ): Promise<BallotPageLayout> {
-    const interpreter = this.getHmbpInterpreter(election)
+    const interpreter = this.getHmbpInterpreter()
     let layout: BallotPageLayout
 
     if ('data' in imageDataOrLayout) {
@@ -351,6 +345,11 @@ export default class SummaryBallotInterpreter implements Interpreter {
     }
   }
 
+  public setElection(election: Election): void {
+    this.election = election
+    this.hmpbInterpreter = undefined
+  }
+
   public setTestMode(testMode: boolean): void {
     this.testMode = testMode
     this.hmpbInterpreter = undefined
@@ -387,7 +386,7 @@ export default class SummaryBallotInterpreter implements Interpreter {
     election: Election,
     { image }: BallotImageData
   ): Promise<InterpretFileResult | undefined> {
-    const hmpbInterpreter = this.getHmbpInterpreter(election)
+    const hmpbInterpreter = this.getHmbpInterpreter()
     const {
       ballot,
       marks,
@@ -475,7 +474,7 @@ export default class SummaryBallotInterpreter implements Interpreter {
     }
   }
 
-  private getHmbpInterpreter(election: Election): HMPBInterpreter {
+  private getHmbpInterpreter(): HMPBInterpreter {
     if (!this.hmpbInterpreter) {
       if (typeof this.testMode === 'undefined') {
         throw new Error(
@@ -483,8 +482,14 @@ export default class SummaryBallotInterpreter implements Interpreter {
         )
       }
 
+      if (typeof this.election === 'undefined') {
+        throw new Error(
+          'election has not been configured; please set it before interpreting ballots'
+        )
+      }
+
       this.hmpbInterpreter = new HMPBInterpreter({
-        election,
+        election: this.election,
         testMode: this.testMode,
       })
     }

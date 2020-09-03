@@ -1,6 +1,6 @@
 import {
-  electionSample as election,
   BallotType,
+  electionSample as election,
 } from '@votingworks/ballot-encoder'
 import { createImageData } from 'canvas'
 import * as fs from 'fs-extra'
@@ -10,14 +10,15 @@ import { fileSync } from 'tmp'
 import { v4 as uuid } from 'uuid'
 import { makeMockInterpreter } from '../test/util/mocks'
 import SystemImporter, { sleep } from './importer'
+import SummaryBallotInterpreter from './interpreter'
 import { Scanner } from './scanner'
 import Store from './store'
+import { ReviewUninterpretableHmpbBallot, SheetOf } from './types'
+import { fromElection } from './util/electionDefinition'
 import makeTemporaryBallotImportImageDirectories, {
   TemporaryBallotImportImageDirectories,
 } from './util/makeTemporaryBallotImportImageDirectories'
 import pdfToImages from './util/pdfToImages'
-import { SheetOf, ReviewUninterpretableHmpbBallot } from './types'
-import { fromElection } from './util/electionDefinition'
 
 const sampleBallotImagesPath = join(__dirname, '..', 'sample-ballot-images/')
 
@@ -45,6 +46,7 @@ test('startImport calls scanner.scanSheet', async () => {
     ...importDirs.paths,
     store,
     scanner,
+    interpreter: new SummaryBallotInterpreter(),
   })
   await expect(importer.startImport()).rejects.toThrow(
     'no election configuration'
@@ -88,6 +90,7 @@ test('unconfigure clears all data.', async () => {
     ...importDirs.paths,
     store,
     scanner,
+    interpreter: new SummaryBallotInterpreter(),
   })
 
   await importer.configure(fromElection(election))
@@ -105,6 +108,7 @@ test('setTestMode zeroes and sets test mode on the interpreter', async () => {
     ...importDirs.paths,
     store,
     scanner,
+    interpreter: new SummaryBallotInterpreter(),
   })
 
   await importer.configure(fromElection(election))
@@ -228,30 +232,6 @@ test('restoreConfig reads config data from the store', async () => {
   await importer.unconfigure()
 })
 
-test('cannot add HMPB templates before configuring an election', async () => {
-  const scanner: jest.Mocked<Scanner> = {
-    scanSheets: jest.fn(),
-  }
-  const importer = new SystemImporter({
-    ...importDirs.paths,
-    store: await Store.memoryStore(),
-    scanner,
-  })
-
-  await expect(
-    importer.addHmpbTemplates(Buffer.of(), {
-      electionHash: '',
-      ballotType: BallotType.Standard,
-      locales: { primary: 'en-US' },
-      ballotStyleId: '77',
-      precinctId: '42',
-      isTestMode: false,
-    })
-  ).rejects.toThrowError(
-    'cannot add a HMPB template without a configured election'
-  )
-})
-
 test('manually importing files', async () => {
   const scanner: jest.Mocked<Scanner> = {
     scanSheets: jest.fn(),
@@ -322,6 +302,7 @@ test('scanning pauses on adjudication then continues', async () => {
     ...importDirs.paths,
     store,
     scanner,
+    interpreter: new SummaryBallotInterpreter(),
   })
 
   await importer.configure(fromElection(election))

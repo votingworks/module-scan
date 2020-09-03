@@ -14,10 +14,7 @@ import {
   ElectionDefinition,
 } from './types'
 import Store from './store'
-import DefaultInterpreter, {
-  Interpreter,
-  PageInterpretation,
-} from './interpreter'
+import { Interpreter, PageInterpretation } from './interpreter'
 import { Scanner } from './scanner'
 import pdfToImages from './util/pdfToImages'
 
@@ -31,7 +28,7 @@ export interface Options {
   scanner: Scanner
   scannedImagesPath: string
   importedImagesPath: string
-  interpreter?: Interpreter
+  interpreter: Interpreter
 }
 
 export interface Importer {
@@ -83,7 +80,7 @@ export default class SystemImporter implements Importer {
     scanner,
     scannedImagesPath,
     importedImagesPath,
-    interpreter = new DefaultInterpreter(),
+    interpreter,
   }: Options) {
     this.store = store
     this.scanner = scanner
@@ -103,28 +100,17 @@ export default class SystemImporter implements Importer {
     pdf: Buffer,
     metadata: BallotMetadata
   ): Promise<BallotPageLayout[]> {
-    const electionDefinition = await this.store.getElectionDefinition()
     const result: BallotPageLayout[] = []
-
-    if (!electionDefinition) {
-      throw new HmpbInterpretationError(
-        `cannot add a HMPB template without a configured election`
-      )
-    }
 
     for await (const { page, pageNumber } of pdfToImages(pdf, {
       scale: 2,
     })) {
       try {
         result.push(
-          await this.interpreter.addHmpbTemplate(
-            electionDefinition.election,
-            page,
-            {
-              ...metadata,
-              pageNumber,
-            }
-          )
+          await this.interpreter.addHmpbTemplate(page, {
+            ...metadata,
+            pageNumber,
+          })
         )
       } catch (error) {
         throw new HmpbInterpretationError(
@@ -155,6 +141,7 @@ export default class SystemImporter implements Importer {
     electionDefinition: ElectionDefinition
   ): Promise<void> {
     await this.store.setElection(electionDefinition)
+    this.interpreter.setElection(electionDefinition.election)
   }
 
   public async setTestMode(testMode: boolean): Promise<void> {
@@ -193,7 +180,7 @@ export default class SystemImporter implements Importer {
         debug('restoring page %d/%d', pageNumber, pageCount)
         const layout = layouts[pageNumber - 1]
 
-        await this.interpreter.addHmpbTemplate(electionDefinition.election, {
+        await this.interpreter.addHmpbTemplate({
           ...layout,
           ballotImage: {
             ...layout.ballotImage,

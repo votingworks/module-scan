@@ -6,6 +6,7 @@ import request from 'supertest'
 import election from '../test/fixtures/state-of-hamilton/election'
 import { makeMockScanner, MockScanner } from '../test/util/mocks'
 import SystemImporter, { Importer } from './importer'
+import SummaryBallotInterpreter from './interpreter'
 import { buildApp } from './server'
 import Store from './store'
 import { BallotPackageManifest, CastVoteRecord } from './types'
@@ -50,7 +51,12 @@ beforeEach(async () => {
   importDirs = makeTemporaryBallotImportImageDirectories()
   store = await Store.memoryStore()
   scanner = makeMockScanner()
-  importer = new SystemImporter({ store, scanner, ...importDirs.paths })
+  importer = new SystemImporter({
+    store,
+    scanner,
+    ...importDirs.paths,
+    interpreter: new SummaryBallotInterpreter(),
+  })
   app = buildApp({ importer, store })
 })
 

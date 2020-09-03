@@ -4,6 +4,7 @@ import * as path from 'path'
 import request from 'supertest'
 import { makeMockScanner, MockScanner } from '../test/util/mocks'
 import SystemImporter from './importer'
+import SummaryBallotInterpreter from './interpreter'
 import { buildApp } from './server'
 import Store from './store'
 import { CastVoteRecord } from './types'
@@ -34,6 +35,7 @@ beforeEach(async () => {
     store,
     scanner,
     ...importDirs.paths,
+    interpreter: new SummaryBallotInterpreter(election),
   })
   app = buildApp({ importer, store })
 })

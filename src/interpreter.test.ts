@@ -63,7 +63,7 @@ test('extracts votes encoded in a QR code', async () => {
   )
   expect(
     (
-      await new SummaryBallotInterpreter().interpretFile({
+      await new SummaryBallotInterpreter(electionSample).interpretFile({
         election: electionSample,
         ballotImagePath,
         ballotImageFile: await readFile(ballotImagePath),
@@ -97,7 +97,8 @@ test('extracts votes encoded in a QR code', async () => {
 })
 
 test('interprets marks on a HMPB', async () => {
-  const interpreter = new SummaryBallotInterpreter()
+  const election = stateOfHamiltonElection
+  const interpreter = new SummaryBallotInterpreter(election)
 
   interpreter.setTestMode(false)
 
@@ -105,7 +106,7 @@ test('interprets marks on a HMPB', async () => {
     await readFile(join(stateOfHamiltonFixturesRoot, 'ballot.pdf')),
     { scale: 2 }
   )) {
-    await interpreter.addHmpbTemplate(stateOfHamiltonElection, page)
+    await interpreter.addHmpbTemplate(page)
 
     if (pageNumber === 1) {
       break
@@ -118,7 +119,7 @@ test('interprets marks on a HMPB', async () => {
   )
   const votes = ((
     await interpreter.interpretFile({
-      election: stateOfHamiltonElection,
+      election,
       ballotImagePath,
       ballotImageFile: await readFile(ballotImagePath),
     })
@@ -152,15 +153,17 @@ test('interprets marks on a HMPB', async () => {
 })
 
 test('interprets marks on an upside-down HMPB', async () => {
-  const interpreter = new SummaryBallotInterpreter()
+  const election = stateOfHamiltonElection
+  const fixturesRoot = stateOfHamiltonFixturesRoot
+  const interpreter = new SummaryBallotInterpreter(election)
 
   interpreter.setTestMode(false)
 
   for await (const { page, pageNumber } of pdfToImages(
-    await readFile(join(stateOfHamiltonFixturesRoot, 'ballot.pdf')),
+    await readFile(join(fixturesRoot, 'ballot.pdf')),
     { scale: 2 }
   )) {
-    await interpreter.addHmpbTemplate(stateOfHamiltonElection, page)
+    await interpreter.addHmpbTemplate(page)
 
     if (pageNumber === 1) {
       break
@@ -168,13 +171,13 @@ test('interprets marks on an upside-down HMPB', async () => {
   }
 
   const ballotImagePath = join(
-    stateOfHamiltonFixturesRoot,
+    fixturesRoot,
     'filled-in-dual-language-p1-flipped.jpg'
   )
   expect(
     (
       await interpreter.interpretFile({
-        election: stateOfHamiltonElection,
+        election,
         ballotImagePath,
         ballotImageFile: await readFile(ballotImagePath),
       })
@@ -1618,19 +1621,21 @@ test('interprets marks on an upside-down HMPB', async () => {
 test('interprets marks in PNG ballots', async () => {
   jest.setTimeout(10000)
 
-  const interpreter = new SummaryBallotInterpreter()
+  const election = choctaw2020Election
+  const fixturesRoot = choctaw2020FixturesRoot
+  const interpreter = new SummaryBallotInterpreter(election)
 
   interpreter.setTestMode(false)
 
   for await (const { page } of pdfToImages(
-    await readFile(join(choctaw2020FixturesRoot, 'ballot.pdf')),
+    await readFile(join(fixturesRoot, 'ballot.pdf')),
     { scale: 2 }
   )) {
-    await interpreter.addHmpbTemplate(choctaw2020Election, page)
+    await interpreter.addHmpbTemplate(page)
   }
 
   {
-    const ballotImagePath = join(choctaw2020FixturesRoot, 'filled-in-p1.png')
+    const ballotImagePath = join(fixturesRoot, 'filled-in-p1.png')
     expect(
       (
         await interpreter.interpretFile({
@@ -2742,29 +2747,28 @@ test('interprets marks in PNG ballots', async () => {
 })
 
 test('returns metadata if the QR code is readable but the HMPB ballot is not', async () => {
-  const interpreter = new SummaryBallotInterpreter()
+  const election = stateOfHamiltonElection
+  const fixturesRoot = stateOfHamiltonFixturesRoot
+  const interpreter = new SummaryBallotInterpreter(election)
 
   interpreter.setTestMode(false)
 
   for await (const { page, pageNumber } of pdfToImages(
-    await readFile(join(stateOfHamiltonFixturesRoot, 'ballot.pdf')),
+    await readFile(join(fixturesRoot, 'ballot.pdf')),
     { scale: 2 }
   )) {
-    await interpreter.addHmpbTemplate(stateOfHamiltonElection, page)
+    await interpreter.addHmpbTemplate(page)
 
     if (pageNumber === 3) {
       break
     }
   }
 
-  const ballotImagePath = join(
-    stateOfHamiltonFixturesRoot,
-    'filled-in-dual-language-p3.jpg'
-  )
+  const ballotImagePath = join(fixturesRoot, 'filled-in-dual-language-p3.jpg')
   expect(
     (
       await interpreter.interpretFile({
-        election: stateOfHamiltonElection,
+        election,
         ballotImagePath,
         ballotImageFile: await readFile(ballotImagePath),
       })

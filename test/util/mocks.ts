@@ -10,6 +10,7 @@ export function makeMockInterpreter(): jest.Mocked<Interpreter> {
   return {
     addHmpbTemplate: jest.fn(),
     interpretFile: jest.fn(),
+    setElection: jest.fn(),
     setTestMode: jest.fn(),
   }
 }
