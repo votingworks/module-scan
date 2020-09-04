@@ -282,11 +282,88 @@ export default class SummaryBallotInterpreter implements Interpreter {
 
   public async interpretSheet(
     sheet: SheetOf<InterpretFileParams>
-  ): Promise<SheetOf<InterpretFileResult>> {
-    return [
+  ): Promise<
+    SheetOf<InterpretFileResult> & { adjudicationInfo: AdjudicationInfo }
+  > {
+    const { election } = this
+
+    if (!election) {
+      throw new Error('no configured election')
+    }
+
+    const [front, back] = [
       await this.interpretFile(sheet[0]),
       await this.interpretFile(sheet[1]),
     ]
+
+    const result = [front, back] as SheetOf<InterpretFileResult> & {
+      adjudicationInfo: AdjudicationInfo
+    }
+    let requiresAdjudication = false
+    const enabledReasons = election.adjudicationReasons ?? [
+      AdjudicationReason.UninterpretableBallot,
+      AdjudicationReason.MarginalMark,
+    ]
+    const marks = [front, back].flatMap(({ interpretation }) =>
+      interpretation.type === 'InterpretedHmpbPage'
+        ? interpretation.markInfo.marks
+        : []
+    )
+
+    const contests = marks.reduce<Contests>(
+      (contests, mark) =>
+        mark.type === 'stray' ||
+        contests.some(({ id }) => id === mark.contest.id)
+          ? contests
+          : [...contests, mark.contest],
+      []
+    )
+    const allReasonInfos = [
+      ...ballotAdjudicationReasons(contests, {
+        optionMarkStatus: (contestId, optionId) => {
+          for (const mark of marks) {
+            if (mark.type === 'stray' || mark.contest.id !== contestId) {
+              continue
+            }
+
+            if (mark.type !== 'candidate' && mark.type !== 'yesno') {
+              throw new Error(`contest type is not yet supported: ${mark.type}`)
+            }
+
+            if (
+              (mark.type === 'candidate' && mark.option.id === optionId) ||
+              (mark.type === 'yesno' && mark.option === optionId)
+            ) {
+              return getMarkStatus(mark, election.markThresholds!)
+            }
+          }
+
+          return MarkStatus.Unmarked
+        },
+      }),
+    ]
+
+    for (const reason of allReasonInfos) {
+      if (enabledReasons.includes(reason.type)) {
+        requiresAdjudication = true
+        debug(
+          'Adjudication required for reason: %s',
+          adjudicationReasonDescription(reason)
+        )
+      } else {
+        debug(
+          'Adjudication reason ignored by configuration: %s',
+          adjudicationReasonDescription(reason)
+        )
+      }
+    }
+
+    result.adjudicationInfo = {
+      requiresAdjudication,
+      allReasonInfos,
+      enabledReasons,
+    }
+    return result
   }
 
   private async interpretFile({
@@ -436,6 +513,9 @@ export default class SummaryBallotInterpreter implements Interpreter {
                 (mark.type === 'candidate' && mark.option.id === optionId) ||
                 (mark.type === 'yesno' && mark.option === optionId)
               ) {
+                if (contestId === 'initiative-65-a') {
+                  console.log({ mark, thresholds: election.markThresholds })
+                }
                 return getMarkStatus(mark, election.markThresholds!)
               }
             }

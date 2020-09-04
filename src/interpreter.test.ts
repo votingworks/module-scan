@@ -1647,7 +1647,10 @@ test('interprets marks on an upside-down HMPB', async () => {
 test('interprets marks in PNG ballots', async () => {
   jest.setTimeout(10000)
 
-  const election = choctaw2020Election
+  const election = {
+    markThresholds: DefaultMarkThresholds,
+    ...choctaw2020Election,
+  }
   const fixturesRoot = choctaw2020FixturesRoot
   const interpreter = new SummaryBallotInterpreter(election)
 
@@ -1666,18 +1669,12 @@ test('interprets marks in PNG ballots', async () => {
     (
       await interpreter.interpretSheet([
         {
-          election: {
-            markThresholds: DefaultMarkThresholds,
-            ...choctaw2020Election,
-          },
+          election,
           ballotImagePath: page1,
           ballotImageFile: await readFile(page1),
         },
         {
-          election: {
-            markThresholds: DefaultMarkThresholds,
-            ...choctaw2020Election,
-          },
+          election,
           ballotImagePath: page2,
           ballotImageFile: await readFile(page2),
         },
