@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+ZBAR="${DIR}/zbar"
+
+if test -d "$ZBAR"; then
+  git -C "$ZBAR" fetch
+  git -C "$ZBAR" reset --hard origin/master
+else
+  git clone --depth 1 https://github.com/votingworks/zbar.git "$ZBAR"
+fi
+
+(
+  cd "$ZBAR"
+  # https://stackoverflow.com/a/33286344/549363
+  autoreconf -f -i
+  ./configure
+  make
+)
