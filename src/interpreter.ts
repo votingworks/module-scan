@@ -106,9 +106,9 @@ export interface Interpreter {
     metadata?: BallotPageMetadata
   ): Promise<BallotPageLayout>
   addHmpbTemplate(layout: BallotPageLayout): Promise<BallotPageLayout>
-  interpretFile(
-    interpretFileParams: InterpretFileParams
-  ): Promise<InterpretFileResult>
+  interpretSheet(
+    sheet: SheetOf<InterpretFileParams>
+  ): Promise<SheetOf<InterpretFileResult>>
   setElection(election: Election): void
   setTestMode(testMode: boolean): void
 }
@@ -280,7 +280,16 @@ export default class SummaryBallotInterpreter implements Interpreter {
     return layout
   }
 
-  public async interpretFile({
+  public async interpretSheet(
+    sheet: SheetOf<InterpretFileParams>
+  ): Promise<SheetOf<InterpretFileResult>> {
+    return [
+      await this.interpretFile(sheet[0]),
+      await this.interpretFile(sheet[1]),
+    ]
+  }
+
+  private async interpretFile({
     election,
     ballotImagePath,
     ballotImageFile,

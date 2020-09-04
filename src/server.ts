@@ -180,7 +180,7 @@ export function buildApp({ store, importer }: AppOptions): Application {
               const front = files[i].path
               const back = files[i + 1].path
 
-              await importer.importFile(batchId, front, back)
+              await importer.importSheet(batchId, front, back)
             }
           } catch (error) {
             response.status(400).json([

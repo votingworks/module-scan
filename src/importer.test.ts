@@ -246,8 +246,8 @@ test('manually importing files', async () => {
   })
 
   await store.setElection(fromElection(election))
-  interpreter.interpretFile
-    .mockResolvedValueOnce({
+  interpreter.interpretSheet.mockResolvedValueOnce([
+    {
       interpretation: {
         type: 'UninterpretedHmpbPage',
         metadata: {
@@ -260,8 +260,8 @@ test('manually importing files', async () => {
           pageNumber: 1,
         },
       },
-    })
-    .mockResolvedValueOnce({
+    },
+    {
       interpretation: {
         type: 'UninterpretedHmpbPage',
         metadata: {
@@ -274,14 +274,15 @@ test('manually importing files', async () => {
           pageNumber: 2,
         },
       },
-    })
+    },
+  ])
   const imageFile = fileSync()
   await sharp({
     create: { width: 1, height: 1, channels: 3, background: '#000' },
   })
     .png()
     .toFile(imageFile.name)
-  const sheetId = await importer.importFile(
+  const sheetId = await importer.importSheet(
     await store.addBatch(),
     imageFile.name,
     imageFile.name

@@ -42,7 +42,7 @@ export interface Importer {
   continueImport(): Promise<void>
   waitForEndOfBatchOrScanningPause(): Promise<void>
   doZero(): Promise<void>
-  importFile(
+  importSheet(
     batchId: string,
     frontImagePath: string,
     backImagePath: string
@@ -198,7 +198,7 @@ export default class SystemImporter implements Importer {
     const start = Date.now()
     try {
       debug('sheetAdded %o batchId=%s STARTING', paths, batchId)
-      return await this.importFile(batchId, paths[0], paths[1])
+      return await this.importSheet(batchId, paths[0], paths[1])
     } finally {
       const end = Date.now()
       debug(
@@ -210,7 +210,7 @@ export default class SystemImporter implements Importer {
     }
   }
 
-  public async importFile(
+  public async importSheet(
     batchId: string,
     frontImagePath: string,
     backImagePath: string
@@ -223,12 +223,23 @@ export default class SystemImporter implements Importer {
 
     let sheetId = uuid()
     const frontImageData = await fsExtra.readFile(frontImagePath)
+    const backImageData = await fsExtra.readFile(backImagePath)
 
-    const frontInterpretFileResult = await this.interpreter.interpretFile({
-      election: electionDefinition.election,
-      ballotImagePath: frontImagePath,
-      ballotImageFile: frontImageData,
-    })
+    const [
+      frontInterpretFileResult,
+      backInterpretFileResult,
+    ] = await this.interpreter.interpretSheet([
+      {
+        election: electionDefinition.election,
+        ballotImagePath: frontImagePath,
+        ballotImageFile: frontImageData,
+      },
+      {
+        election: electionDefinition.election,
+        ballotImagePath: backImagePath,
+        ballotImageFile: backImageData,
+      },
+    ])
 
     debug(
       'interpreted %s (%s): %O',
@@ -242,14 +253,6 @@ export default class SystemImporter implements Importer {
       frontImagePath,
       frontInterpretFileResult.normalizedImage
     )
-
-    const backImageData = await fsExtra.readFile(backImagePath)
-
-    const backInterpretFileResult = await this.interpreter.interpretFile({
-      election: electionDefinition.election,
-      ballotImagePath: backImagePath,
-      ballotImageFile: backImageData,
-    })
 
     debug(
       'interpreted %s (%s): %O',

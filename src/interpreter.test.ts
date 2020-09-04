@@ -57,18 +57,23 @@ test('does not find QR codes when there are none to find', async () => {
 })
 
 test('extracts votes encoded in a QR code', async () => {
-  const ballotImagePath = join(
-    sampleBallotImagesPath,
-    'sample-batch-1-ballot-1.jpg'
-  )
+  const bmdPage = join(sampleBallotImagesPath, 'sample-batch-1-ballot-1.jpg')
+  const blankPage = join(sampleBallotImagesPath, 'blank-page.png')
   expect(
     (
-      await new SummaryBallotInterpreter(electionSample).interpretFile({
-        election: electionSample,
-        ballotImagePath,
-        ballotImageFile: await readFile(ballotImagePath),
-      })
-    ).interpretation
+      await new SummaryBallotInterpreter(electionSample).interpretSheet([
+        {
+          election: electionSample,
+          ballotImagePath: bmdPage,
+          ballotImageFile: await readFile(bmdPage),
+        },
+        {
+          election: electionSample,
+          ballotImagePath: blankPage,
+          ballotImageFile: await readFile(blankPage),
+        },
+      ])
+    )[0].interpretation
   ).toMatchInlineSnapshot(`
     Object {
       "ballotId": "r6UYR4t7hEFMz8QlMWf1Sw",
@@ -97,6 +102,8 @@ test('extracts votes encoded in a QR code', async () => {
 })
 
 test('interprets marks on a HMPB', async () => {
+  jest.setTimeout(10000)
+
   const election = stateOfHamiltonElection
   const interpreter = new SummaryBallotInterpreter(election)
 
@@ -108,22 +115,33 @@ test('interprets marks on a HMPB', async () => {
   )) {
     await interpreter.addHmpbTemplate(page)
 
-    if (pageNumber === 1) {
+    if (pageNumber === 2) {
       break
     }
   }
 
-  const ballotImagePath = join(
+  const page1 = join(
     stateOfHamiltonFixturesRoot,
     'filled-in-dual-language-p1.jpg'
   )
+  const page2 = join(
+    stateOfHamiltonFixturesRoot,
+    'filled-in-dual-language-p2.jpg'
+  )
   const votes = ((
-    await interpreter.interpretFile({
-      election,
-      ballotImagePath,
-      ballotImageFile: await readFile(ballotImagePath),
-    })
-  ).interpretation as InterpretedHmpbPage).votes
+    await interpreter.interpretSheet([
+      {
+        election,
+        ballotImagePath: page1,
+        ballotImageFile: await readFile(page1),
+      },
+      {
+        election,
+        ballotImagePath: page2,
+        ballotImageFile: await readFile(page2),
+      },
+    ])
+  )[0].interpretation as InterpretedHmpbPage).votes
 
   expect(votes).toMatchInlineSnapshot(`
     Object {
@@ -165,23 +183,31 @@ test('interprets marks on an upside-down HMPB', async () => {
   )) {
     await interpreter.addHmpbTemplate(page)
 
-    if (pageNumber === 1) {
+    if (pageNumber === 2) {
       break
     }
   }
 
-  const ballotImagePath = join(
+  const page1Flipped = join(
     fixturesRoot,
     'filled-in-dual-language-p1-flipped.jpg'
   )
+  const page2 = join(fixturesRoot, 'filled-in-dual-language-p2.jpg')
   expect(
     (
-      await interpreter.interpretFile({
-        election,
-        ballotImagePath,
-        ballotImageFile: await readFile(ballotImagePath),
-      })
-    ).interpretation as InterpretedHmpbPage
+      await interpreter.interpretSheet([
+        {
+          election,
+          ballotImagePath: page1Flipped,
+          ballotImageFile: await readFile(page1Flipped),
+        },
+        {
+          election,
+          ballotImagePath: page1Flipped,
+          ballotImageFile: await readFile(page2),
+        },
+      ])
+    )[0].interpretation as InterpretedHmpbPage
   ).toMatchInlineSnapshot(`
     Object {
       "adjudicationInfo": Object {
@@ -1634,20 +1660,31 @@ test('interprets marks in PNG ballots', async () => {
     await interpreter.addHmpbTemplate(page)
   }
 
-  {
-    const ballotImagePath = join(fixturesRoot, 'filled-in-p1.png')
-    expect(
-      (
-        await interpreter.interpretFile({
+  const page1 = join(fixturesRoot, 'filled-in-p1.png')
+  const page2 = join(fixturesRoot, 'filled-in-p2.png')
+  expect(
+    (
+      await interpreter.interpretSheet([
+        {
           election: {
             markThresholds: DefaultMarkThresholds,
             ...choctaw2020Election,
           },
-          ballotImagePath,
-          ballotImageFile: await readFile(ballotImagePath),
-        })
-      ).interpretation
-    ).toMatchInlineSnapshot(`
+          ballotImagePath: page1,
+          ballotImageFile: await readFile(page1),
+        },
+        {
+          election: {
+            markThresholds: DefaultMarkThresholds,
+            ...choctaw2020Election,
+          },
+          ballotImagePath: page2,
+          ballotImageFile: await readFile(page2),
+        },
+      ])
+    ).map(({ interpretation }) => interpretation)
+  ).toMatchInlineSnapshot(`
+    Array [
       Object {
         "adjudicationInfo": Object {
           "allReasonInfos": Array [
@@ -2546,24 +2583,7 @@ test('interprets marks in PNG ballots', async () => {
             "yes",
           ],
         },
-      }
-    `)
-  }
-
-  {
-    const ballotImagePath = join(choctaw2020FixturesRoot, 'filled-in-p2.png')
-    expect(
-      (
-        await interpreter.interpretFile({
-          election: {
-            markThresholds: DefaultMarkThresholds,
-            ...choctaw2020Election,
-          },
-          ballotImagePath,
-          ballotImageFile: await readFile(ballotImagePath),
-        })
-      ).interpretation
-    ).toMatchInlineSnapshot(`
+      },
       Object {
         "adjudicationInfo": Object {
           "allReasonInfos": Array [],
@@ -2589,7 +2609,7 @@ test('interprets marks in PNG ballots', async () => {
               "contest": Object {
                 "description": "Shall the State of Mississippi adopt the following proposed state flag to replace the current state flag? 
 
-       <svg xmlns=\\"http://www.w3.org/2000/svg\\" xmlns:xlink=\\"http://www.w3.org/1999/xlink\\" viewBox=\\"0 0 625 375\\"><path fill=\\"#fff\\" d=\\"M0 0v375h625V0z\\"/><path fill=\\"#012369\\" d=\\"M243 243H0V0h243z\\"/><path fill=\\"#bc0a29\\" d=\\"M0 250h625v125H0z\\"/><path fill=\\"#012369\\" d=\\"M625 0v125H250V0z\\"/><path id=\\"a\\" fill=\\"#fff\\" d=\\"M121.499 57.502l3.407 10.716 11.092-.021-8.986 6.602 3.448 10.702-8.961-6.635-8.961 6.635 3.448-10.702L107 68.197l11.091.021z\\"/><use transform=\\"translate(43.298 26.307)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(43.299 76.301)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(0 101.305)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(-43.296 76.301)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(-43.297 26.308)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(-74.06 0.186)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(-89.326 40.456)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(-84.155 83.219)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(-59.667 118.656)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(-21.539 138.691)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(21.54 138.69)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(59.669 118.656)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(84.157 83.219)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(89.327 40.458)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(74.062 0.186)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(41.823 -28.386)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(0 -40)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(-41.822 -29.688)\\" xlink:href=\\"#a\\"/><use transform=\\"scale(1.65) translate(-47.9 2.904)\\" xlink:href=\\"#a\\"/></svg>",
+     <svg xmlns=\\"http://www.w3.org/2000/svg\\" xmlns:xlink=\\"http://www.w3.org/1999/xlink\\" viewBox=\\"0 0 625 375\\"><path fill=\\"#fff\\" d=\\"M0 0v375h625V0z\\"/><path fill=\\"#012369\\" d=\\"M243 243H0V0h243z\\"/><path fill=\\"#bc0a29\\" d=\\"M0 250h625v125H0z\\"/><path fill=\\"#012369\\" d=\\"M625 0v125H250V0z\\"/><path id=\\"a\\" fill=\\"#fff\\" d=\\"M121.499 57.502l3.407 10.716 11.092-.021-8.986 6.602 3.448 10.702-8.961-6.635-8.961 6.635 3.448-10.702L107 68.197l11.091.021z\\"/><use transform=\\"translate(43.298 26.307)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(43.299 76.301)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(0 101.305)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(-43.296 76.301)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(-43.297 26.308)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(-74.06 0.186)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(-89.326 40.456)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(-84.155 83.219)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(-59.667 118.656)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(-21.539 138.691)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(21.54 138.69)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(59.669 118.656)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(84.157 83.219)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(89.327 40.458)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(74.062 0.186)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(41.823 -28.386)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(0 -40)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(-41.822 -29.688)\\" xlink:href=\\"#a\\"/><use transform=\\"scale(1.65) translate(-47.9 2.904)\\" xlink:href=\\"#a\\"/></svg>",
                 "districtId": "100000275",
                 "id": "flag-question",
                 "section": "State of Mississippi",
@@ -2625,7 +2645,7 @@ test('interprets marks in PNG ballots', async () => {
               "contest": Object {
                 "description": "Shall the State of Mississippi adopt the following proposed state flag to replace the current state flag? 
 
-       <svg xmlns=\\"http://www.w3.org/2000/svg\\" xmlns:xlink=\\"http://www.w3.org/1999/xlink\\" viewBox=\\"0 0 625 375\\"><path fill=\\"#fff\\" d=\\"M0 0v375h625V0z\\"/><path fill=\\"#012369\\" d=\\"M243 243H0V0h243z\\"/><path fill=\\"#bc0a29\\" d=\\"M0 250h625v125H0z\\"/><path fill=\\"#012369\\" d=\\"M625 0v125H250V0z\\"/><path id=\\"a\\" fill=\\"#fff\\" d=\\"M121.499 57.502l3.407 10.716 11.092-.021-8.986 6.602 3.448 10.702-8.961-6.635-8.961 6.635 3.448-10.702L107 68.197l11.091.021z\\"/><use transform=\\"translate(43.298 26.307)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(43.299 76.301)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(0 101.305)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(-43.296 76.301)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(-43.297 26.308)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(-74.06 0.186)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(-89.326 40.456)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(-84.155 83.219)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(-59.667 118.656)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(-21.539 138.691)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(21.54 138.69)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(59.669 118.656)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(84.157 83.219)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(89.327 40.458)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(74.062 0.186)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(41.823 -28.386)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(0 -40)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(-41.822 -29.688)\\" xlink:href=\\"#a\\"/><use transform=\\"scale(1.65) translate(-47.9 2.904)\\" xlink:href=\\"#a\\"/></svg>",
+     <svg xmlns=\\"http://www.w3.org/2000/svg\\" xmlns:xlink=\\"http://www.w3.org/1999/xlink\\" viewBox=\\"0 0 625 375\\"><path fill=\\"#fff\\" d=\\"M0 0v375h625V0z\\"/><path fill=\\"#012369\\" d=\\"M243 243H0V0h243z\\"/><path fill=\\"#bc0a29\\" d=\\"M0 250h625v125H0z\\"/><path fill=\\"#012369\\" d=\\"M625 0v125H250V0z\\"/><path id=\\"a\\" fill=\\"#fff\\" d=\\"M121.499 57.502l3.407 10.716 11.092-.021-8.986 6.602 3.448 10.702-8.961-6.635-8.961 6.635 3.448-10.702L107 68.197l11.091.021z\\"/><use transform=\\"translate(43.298 26.307)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(43.299 76.301)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(0 101.305)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(-43.296 76.301)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(-43.297 26.308)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(-74.06 0.186)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(-89.326 40.456)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(-84.155 83.219)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(-59.667 118.656)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(-21.539 138.691)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(21.54 138.69)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(59.669 118.656)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(84.157 83.219)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(89.327 40.458)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(74.062 0.186)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(41.823 -28.386)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(0 -40)\\" xlink:href=\\"#a\\"/><use transform=\\"translate(-41.822 -29.688)\\" xlink:href=\\"#a\\"/><use transform=\\"scale(1.65) translate(-47.9 2.904)\\" xlink:href=\\"#a\\"/></svg>",
                 "districtId": "100000275",
                 "id": "flag-question",
                 "section": "State of Mississippi",
@@ -2741,9 +2761,9 @@ test('interprets marks in PNG ballots', async () => {
             "no",
           ],
         },
-      }
-    `)
-  }
+      },
+    ]
+  `)
 })
 
 test('returns metadata if the QR code is readable but the HMPB ballot is not', async () => {
@@ -2764,15 +2784,23 @@ test('returns metadata if the QR code is readable but the HMPB ballot is not', a
     }
   }
 
-  const ballotImagePath = join(fixturesRoot, 'filled-in-dual-language-p3.jpg')
+  const page3 = join(fixturesRoot, 'filled-in-dual-language-p3.jpg')
+  const page4 = join(fixturesRoot, 'filled-in-dual-language-p4.jpg')
   expect(
     (
-      await interpreter.interpretFile({
-        election,
-        ballotImagePath,
-        ballotImageFile: await readFile(ballotImagePath),
-      })
-    ).interpretation as UninterpretedHmpbPage
+      await interpreter.interpretSheet([
+        {
+          election,
+          ballotImagePath: page3,
+          ballotImageFile: await readFile(page3),
+        },
+        {
+          election,
+          ballotImagePath: page4,
+          ballotImageFile: await readFile(page4),
+        },
+      ])
+    )[0].interpretation as UninterpretedHmpbPage
   ).toMatchInlineSnapshot(`
     Object {
       "metadata": Object {

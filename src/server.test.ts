@@ -181,7 +181,7 @@ test('POST /scan/scanBatch errors', async () => {
 })
 
 test('POST /scan/scanFiles', async () => {
-  importerMock.importFile.mockResolvedValueOnce(uuid())
+  importerMock.importSheet.mockResolvedValueOnce(uuid())
   await request(app)
     .post('/scan/scanFiles')
     .attach('files', Buffer.of(), {

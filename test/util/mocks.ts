@@ -9,7 +9,7 @@ import { SheetOf } from '../../src/types'
 export function makeMockInterpreter(): jest.Mocked<Interpreter> {
   return {
     addHmpbTemplate: jest.fn(),
-    interpretFile: jest.fn(),
+    interpretSheet: jest.fn(),
     setElection: jest.fn(),
     setTestMode: jest.fn(),
   }
@@ -23,7 +23,7 @@ export function makeMockImporter(): jest.Mocked<Importer> {
     startImport: jest.fn(),
     continueImport: jest.fn(),
     waitForEndOfBatchOrScanningPause: jest.fn(),
-    importFile: jest.fn(),
+    importSheet: jest.fn(),
     doZero: jest.fn(),
     getStatus: jest.fn(),
     restoreConfig: jest.fn(),
