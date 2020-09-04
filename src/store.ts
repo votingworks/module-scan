@@ -12,45 +12,30 @@ import {
   BallotMark,
   BallotPageMetadata,
   BallotTargetMark,
-  Size,
 } from '@votingworks/hmpb-interpreter'
 import { createHash } from 'crypto'
 import makeDebug from 'debug'
 import { promises as fs } from 'fs'
 import { join } from 'path'
-import sharp from 'sharp'
 import * as sqlite3 from 'sqlite3'
 import { Writable } from 'stream'
+import { inspect } from 'util'
 import { v4 as uuid } from 'uuid'
 import { buildCastVoteRecord } from './buildCastVoteRecord'
-import {
-  MarkInfo,
-  PageInterpretation,
-  sheetRequiresAdjudication,
-} from './interpreter'
+import { PageInterpretation, sheetRequiresAdjudication } from './interpreter'
 import {
   AdjudicationStatus,
   BallotMetadata,
   BatchInfo,
-  getMarkStatus,
+  ElectionDefinition,
   isMarginalMark,
   PageInterpretationWithFiles,
   SerializableBallotPageLayout,
   SheetOf,
   Side,
-  ElectionDefinition,
 } from './types'
-import {
-  AdjudicationInfo,
-  Contest,
-  ContestLayout,
-  MarksByContestId,
-  ReviewBallot,
-} from './types/ballot-review'
-import allContestOptions from './util/allContestOptions'
-import getBallotPageContests from './util/getBallotPageContests'
+import { MarksByContestId } from './types/ballot-review'
 import { changesFromMarks, mergeChanges } from './util/marks'
-import { inspect } from 'util'
 
 const debug = makeDebug('module-scan:store')
 
@@ -530,183 +515,11 @@ export default class Store {
     return row
   }
 
-  public async getPage(
-    sheetId: string,
-    side: Side
-  ): Promise<ReviewBallot | undefined> {
-    const electionDefinition = await this.getElectionDefinition()
-
-    if (!electionDefinition) {
-      return
-    }
-
-    const row = await this.dbGetAsync<
-      | {
-          id: number
-          originalFilename: string
-          normalizedFilename: string
-          marksJSON?: string
-          adjudicationJSON?: string
-          adjudicationInfoJSON?: string
-          metadataJSON?: string
-        }
-      | undefined,
-      [string]
-    >(
-      `
-        select
-          id,
-          ${side}_original_filename as originalFilename,
-          ${side}_normalized_filename as normalizedFilename,
-          json_extract(${side}_interpretation_json, '$.markInfo') as marksJSON,
-          json_extract(${side}_interpretation_json, '$.metadata') as metadataJSON,
-          ${side}_adjudication_json as adjudicationJSON,
-          json_extract(${side}_interpretation_json, '$.adjudicationInfo') as adjudicationInfoJSON
-        from sheets
-        where id = ?
-      `,
-      sheetId
-    )
-
-    if (!row) {
-      return
-    }
-
-    const marks: MarkInfo | undefined = row.marksJSON
-      ? JSON.parse(row.marksJSON)
-      : undefined
-    const adjudication: MarksByContestId | undefined = row.adjudicationJSON
-      ? JSON.parse(row.adjudicationJSON)
-      : undefined
-    const adjudicationInfo: AdjudicationInfo = row.adjudicationInfoJSON
-      ? JSON.parse(row.adjudicationInfoJSON)
-      : undefined
-    const metadata: BallotPageMetadata | undefined = row.metadataJSON
-      ? JSON.parse(row.metadataJSON)
-      : undefined
-
-    if (!metadata) {
-      return
-    }
-
-    const layouts = await this.getBallotLayoutsForMetadata(metadata)
-    const layout = layouts[metadata.pageNumber - 1]
-    const ballotStyle = getBallotStyle({
-      ballotStyleId: metadata.ballotStyleId,
-      election: electionDefinition.election,
-    })
-
-    if (!ballotStyle) {
-      return
-    }
-
-    const ballotSize = await (async (): Promise<Size> => {
-      if (marks) {
-        return marks.ballotSize
-      }
-
-      const { width, height } = await sharp(row.normalizedFilename).metadata()
-
-      if (!width || !height) {
-        throw new Error(
-          `unable to read image size from ${row.normalizedFilename}`
-        )
-      }
-
-      return { width, height }
-    })()
-
-    const ballot: ReviewBallot['ballot'] = {
-      id: sheetId,
-      url: `/scan/hmpb/ballot/${sheetId}/front`,
-      image: {
-        url: `/scan/hmpb/ballot/${sheetId}/front/image`,
-        ...ballotSize,
-      },
-    }
-
-    const ballotPageContests = getBallotPageContests(
-      electionDefinition.election,
-      metadata,
-      layouts
-    )
-
-    const contests: Contest[] = ballotPageContests.map((contestDefinition) => {
-      return {
-        id: contestDefinition.id,
-        title: contestDefinition.title,
-        options: [...allContestOptions(contestDefinition)],
-      }
-    })
-
-    if (!marks) {
-      return {
-        type: 'ReviewUninterpretableHmpbBallot',
-        contests,
-        ballot,
-      }
-    }
-
-    debug('overlaying ballot adjudication: %O', adjudication)
-
-    const overlay = marks.marks.reduce<MarksByContestId>(
-      (marks, mark) =>
-        mark.type === 'stray'
-          ? marks
-          : {
-              ...marks,
-              [mark.contest.id]: {
-                ...marks[mark.contest.id],
-                [typeof mark.option === 'string'
-                  ? mark.option
-                  : mark.option.id]:
-                  adjudication?.[mark.contest.id]?.[
-                    typeof mark.option === 'string'
-                      ? mark.option
-                      : mark.option.id
-                  ] ??
-                  getMarkStatus(
-                    mark,
-                    electionDefinition.election.markThresholds!
-                  ),
-              },
-            },
-      {}
-    )
-
-    debug('overlay results: %O', overlay)
-
-    const contestLayouts: ContestLayout[] = ballotPageContests.map(
-      (_contestDefinition, contestIndex) => {
-        const contestLayout = layout.contests[contestIndex]
-        return {
-          bounds: contestLayout.bounds,
-          options: contestLayout.options.map((option) => ({
-            bounds: option.bounds,
-          })),
-        }
-      }
-    )
-
-    return {
-      type: 'ReviewMarginalMarksBallot',
-      ballot,
-      marks: overlay,
-      contests,
-      layout: contestLayouts,
-      adjudicationInfo,
-    }
-  }
-
-  public async getNextReviewBallot(): Promise<ReviewBallot | undefined> {
-    const row = await this.dbGetAsync<
-      { id: string; front: boolean; back: boolean } | undefined
-    >(
+  public async getNextReviewSheetId(): Promise<string | undefined> {
+    const row = await this.dbGetAsync<{ id: string } | undefined>(
       `
       select
-        id,
-        front_finished_adjudication_at is not null as front,
-        back_finished_adjudication_at is not null as back
+        id
       from sheets
       where
         requires_adjudication = 1 and
@@ -719,7 +532,7 @@ export default class Store {
 
     if (row) {
       debug('got next review ballot requiring adjudication (id=%s)', row.id)
-      return this.getPage(row.id, row.front ? 'front' : 'back')
+      return row.id
     } else {
       debug('no review sheets requiring adjudication')
     }

@@ -296,23 +296,6 @@ export function buildApp({ store, importer }: AppOptions): Application {
     response.json(status)
   })
 
-  app.get('/scan/hmpb/ballot/:sheetId/:side', async (request, response) => {
-    const { sheetId, side } = request.params
-
-    if (typeof sheetId !== 'string' || (side !== 'front' && side !== 'back')) {
-      response.status(404)
-      return
-    }
-
-    const ballot = await store.getPage(sheetId, side)
-
-    if (ballot) {
-      response.json(ballot)
-    } else {
-      response.status(404).end()
-    }
-  })
-
   app.patch('/scan/hmpb/ballot/:sheetId/:side', async (request, response) => {
     const { sheetId, side } = request.params
 
@@ -376,29 +359,19 @@ export function buildApp({ store, importer }: AppOptions): Application {
     }
   })
 
-  app.get('/scan/hmpb/review/next-ballot', async (_request, response) => {
-    const ballot = await store.getNextReviewBallot()
-
-    if (ballot) {
-      response.json(ballot)
-    } else {
-      response.status(404).end()
-    }
-  })
-
   app.get('/scan/hmpb/review/next-sheet', async (_request, response) => {
-    const ballot = await store.getNextReviewBallot()
+    const id = await store.getNextReviewSheetId()
 
-    if (ballot) {
+    if (id) {
       const sheetInfo: BallotSheetInfo = {
         front: {
           image: {
-            url: `/scan/hmpb/ballot/${ballot.ballot.id}/front/image/normalized`,
+            url: `/scan/hmpb/ballot/${id}/front/image/normalized`,
           },
         },
         back: {
           image: {
-            url: `/scan/hmpb/ballot/${ballot.ballot.id}/back/image/normalized`,
+            url: `/scan/hmpb/ballot/${id}/back/image/normalized`,
           },
         },
       }

@@ -13,7 +13,7 @@ import SystemImporter, { sleep } from './importer'
 import SummaryBallotInterpreter from './interpreter'
 import { Scanner } from './scanner'
 import Store from './store'
-import { ReviewUninterpretableHmpbBallot, SheetOf } from './types'
+import { SheetOf } from './types'
 import { fromElection } from './util/electionDefinition'
 import makeTemporaryBallotImportImageDirectories, {
   TemporaryBallotImportImageDirectories,
@@ -356,21 +356,9 @@ test('scanning pauses on adjudication then continues', async () => {
     return { adjudicated: 0, remaining: 0 }
   })
 
-  jest.spyOn(store, 'getNextReviewBallot').mockImplementationOnce(async () => {
-    return {
-      type: 'ReviewUninterpretableHmpbBallot',
-      contests: [],
-      ballot: {
-        id: 'mock-sheet-id',
-        url: '/mock/url',
-        image: {
-          url: '/mock/image/url',
-          width: 100,
-          height: 200,
-        },
-      },
-    } as ReviewUninterpretableHmpbBallot
-  })
+  jest
+    .spyOn(store, 'getNextReviewSheetId')
+    .mockResolvedValueOnce('mock-sheet-id')
 
   expect(store.deleteSheet).toHaveBeenCalledTimes(0)
 

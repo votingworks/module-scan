@@ -410,10 +410,10 @@ export default class SystemImporter implements Importer {
   public async continueImport(): Promise<void> {
     if (this.sheetGenerator && this.batchId) {
       // if there was a ballot to adjudicate, remove it.
-      const reviewBallot = await this.store.getNextReviewBallot()
+      const reviewBallotId = await this.store.getNextReviewSheetId()
 
-      if (reviewBallot?.ballot) {
-        await this.store.deleteSheet(reviewBallot.ballot.id)
+      if (reviewBallotId) {
+        await this.store.deleteSheet(reviewBallotId)
       }
 
       this.scanOneSheet().catch((err) => {
