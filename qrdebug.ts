@@ -12,6 +12,7 @@ import {
 } from '@votingworks/ballot-encoder/src/election'
 import { v1 } from '@votingworks/ballot-encoder'
 import { inspect } from 'util'
+import { toByteArray } from 'base64-js'
 
 async function main() {
   const imagePaths: string[] = []
@@ -83,6 +84,13 @@ async function main() {
 
 function inspectMetadata(election: Election, data: Buffer): string {
   let checkData: v1.HMPBBallotPageMetadataCheckData
+
+  try {
+    const base64data = new TextDecoder().decode(data)
+    data = Buffer.from(base64data, 'base64')
+  } catch {
+    // ignore
+  }
 
   try {
     checkData = v1.decodeHMPBBallotPageMetadataCheckData(data)
