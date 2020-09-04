@@ -20,7 +20,6 @@ import {
   metadataFromBytes,
   Size,
 } from '@votingworks/hmpb-interpreter'
-import { detect as qrdetect } from '@votingworks/qrdetect'
 import makeDebug from 'debug'
 import { decode as quircDecode } from 'node-quirc'
 import sharp from 'sharp'
@@ -36,6 +35,9 @@ import ballotAdjudicationReasons, {
   adjudicationReasonDescription,
 } from './util/ballotAdjudicationReasons'
 import threshold from './util/threshold'
+import zbarimg from './util/zbarimg'
+import { fileSync } from 'tmp'
+import { writeFile } from 'fs-extra'
 
 const MAXIMUM_BLANK_PAGE_FOREGROUND_PIXEL_RATIO = 0.005
 
@@ -50,6 +52,12 @@ export interface InterpretFileParams {
 export interface InterpretFileResult {
   interpretation: PageInterpretation
   normalizedImage?: ImageData
+}
+
+export interface SheetInterpretation {
+  front: InterpretFileResult
+  back: InterpretFileResult
+  adjudicationInfo: AdjudicationInfo
 }
 
 export interface MarkInfo {
@@ -108,7 +116,7 @@ export interface Interpreter {
   addHmpbTemplate(layout: BallotPageLayout): Promise<BallotPageLayout>
   interpretSheet(
     sheet: SheetOf<InterpretFileParams>
-  ): Promise<SheetOf<InterpretFileResult>>
+  ): Promise<SheetInterpretation>
   setElection(election: Election): void
   setTestMode(testMode: boolean): void
 }
@@ -120,10 +128,7 @@ interface BallotImageData {
 }
 
 async function getQRCode(
-  encodedImageData: Buffer,
-  decodedImageData: Buffer,
-  width: number,
-  height: number
+  encodedImageData: Buffer
 ): Promise<Buffer | undefined> {
   const [quircCode] = await quircDecode(encodedImageData)
 
@@ -131,10 +136,12 @@ async function getQRCode(
     return quircCode.data
   }
 
-  const qrdetectCodes = qrdetect(decodedImageData, width, height)
-
-  if (qrdetectCodes.length > 0) {
-    return qrdetectCodes[0].data
+  const zbarFile = fileSync()
+  try {
+    await writeFile(zbarFile.name, encodedImageData)
+    return await zbarimg(zbarFile.name)
+  } finally {
+    zbarFile.removeCallback()
   }
 }
 
@@ -166,9 +173,8 @@ export async function getBallotImageData(
     .clone()
     .extract({ left: 0, top: 0, width, height: clipHeight })
 
-  const topRaw = await topCrop.toBuffer()
   const topImage = await topCrop.png().toBuffer()
-  const topQrcode = await getQRCode(topImage, topRaw, width, clipHeight)
+  const topQrcode = await getQRCode(topImage)
 
   if (topQrcode) {
     return { value: { file, image, qrcode: topQrcode } }
@@ -180,14 +186,8 @@ export async function getBallotImageData(
     width,
     height: clipHeight,
   })
-  const bottomRaw = await bottomCrop.toBuffer()
   const bottomImage = await bottomCrop.png().toBuffer()
-  const bottomQrcode = await getQRCode(
-    bottomImage,
-    bottomRaw,
-    width,
-    clipHeight
-  )
+  const bottomQrcode = await getQRCode(bottomImage)
 
   if (bottomQrcode) {
     return { value: { file, image, qrcode: bottomQrcode } }
@@ -282,9 +282,7 @@ export default class SummaryBallotInterpreter implements Interpreter {
 
   public async interpretSheet(
     sheet: SheetOf<InterpretFileParams>
-  ): Promise<
-    SheetOf<InterpretFileResult> & { adjudicationInfo: AdjudicationInfo }
-  > {
+  ): Promise<SheetInterpretation> {
     const { election } = this
 
     if (!election) {
@@ -296,9 +294,6 @@ export default class SummaryBallotInterpreter implements Interpreter {
       await this.interpretFile(sheet[1]),
     ]
 
-    const result = [front, back] as SheetOf<InterpretFileResult> & {
-      adjudicationInfo: AdjudicationInfo
-    }
     let requiresAdjudication = false
     const enabledReasons = election.adjudicationReasons ?? [
       AdjudicationReason.UninterpretableBallot,
@@ -358,12 +353,15 @@ export default class SummaryBallotInterpreter implements Interpreter {
       }
     }
 
-    result.adjudicationInfo = {
-      requiresAdjudication,
-      allReasonInfos,
-      enabledReasons,
+    return {
+      front,
+      back,
+      adjudicationInfo: {
+        allReasonInfos,
+        enabledReasons,
+        requiresAdjudication,
+      },
     }
-    return result
   }
 
   private async interpretFile({
@@ -513,9 +511,6 @@ export default class SummaryBallotInterpreter implements Interpreter {
                 (mark.type === 'candidate' && mark.option.id === optionId) ||
                 (mark.type === 'yesno' && mark.option === optionId)
               ) {
-                if (contestId === 'initiative-65-a') {
-                  console.log({ mark, thresholds: election.markThresholds })
-                }
                 return getMarkStatus(mark, election.markThresholds!)
               }
             }

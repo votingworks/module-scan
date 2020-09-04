@@ -50,7 +50,7 @@ export const ALLOWED_CONFIG_KEYS: readonly string[] = Object.values(ConfigKey)
 
 export const DefaultMarkThresholds: Readonly<MarkThresholds> = {
   marginal: 0.17,
-  definite: 0.25,
+  definite: 0.17,
 }
 
 /**
