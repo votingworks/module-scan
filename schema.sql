@@ -17,8 +17,7 @@ create table sheets (
 
   -- Original interpretation of the sheet. These values should never be updated.
   -- @type {PageInterpretation}
-  front_interpretation_json text not null,
-  back_interpretation_json text not null,
+  interpretation_json text not null,
 
   -- Did this sheet require adjudication? This value should never be updated.
   requires_adjudication boolean,

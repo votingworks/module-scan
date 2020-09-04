@@ -247,7 +247,7 @@ test('failed scan with QR code can be adjudicated and exported', async () => {
   const { id } = await store.dbGetAsync<{ id: string }>(`
     select id
     from sheets
-    where json_extract(front_interpretation_json, '$.metadata.pageNumber') = 3
+    where json_extract(interpretation_json, '$.front.metadata.pageNumber') = 3
   `)
 
   await request(app)

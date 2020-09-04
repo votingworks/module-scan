@@ -434,22 +434,23 @@ export default class Store {
             batch_id,
             front_original_filename,
             front_normalized_filename,
-            front_interpretation_json,
             back_original_filename,
             back_normalized_filename,
-            back_interpretation_json,
+            interpretation_json,
             requires_adjudication
           ) values (
-            ?, ?, ?, ?, ?, ?, ?, ?, ?
+            ?, ?, ?, ?, ?, ?, ?, ?
           )`,
         sheetId,
         batchId,
         front.originalFilename,
         front.normalizedFilename,
-        JSON.stringify(front.interpretation),
         back.originalFilename,
         back.normalizedFilename,
-        JSON.stringify(back.interpretation ?? {}),
+        JSON.stringify({
+          front: front.interpretation,
+          back: back.interpretation,
+        }),
         sheetRequiresAdjudication([front.interpretation, back.interpretation])
       )
     } catch (error) {
@@ -597,7 +598,7 @@ export default class Store {
       `
       select
         ${side}_adjudication_json as adjudicationJSON,
-        json_extract(${side}_interpretation_json, '$.markInfo') as marksJSON
+        json_extract(interpretation_json, '$.${side}.markInfo') as marksJSON
       from sheets
       where id = ? and deleted_at is null
     `,
@@ -741,8 +742,8 @@ export default class Store {
     const sql = `
       select
         id,
-        front_interpretation_json as frontInterpretationJSON,
-        back_interpretation_json as backInterpretationJSON,
+        json_extract(interpretation_json, '$.front') as frontInterpretationJSON,
+        json_extract(interpretation_json, '$.back') as backInterpretationJSON,
         front_adjudication_json as frontAdjudicationJSON,
         back_adjudication_json as backAdjudicationJSON
       from sheets
