@@ -6,7 +6,7 @@
     "build": "tsc",
     "format": "prettier '**/*.+(css|graphql|json|less|md|mdx|sass|scss|yaml|yml)' --write",
     "lint": "tsc --noEmit && eslint '*/**/*.{js,jsx,ts,tsx}' --quiet",
-    "start": "ts-node --files ./src/index.ts",
+    "start": "ts-node -T --files ./src/index.ts",
     "test": "jest",
     "test:coverage": "jest --coverage",
     "test:debug": "node --inspect-brk $(which jest) --runInBand --no-cache",
@@ -32,7 +32,7 @@
   "dependencies": {
     "@types/sharp": "^0.25.1",
     "@votingworks/ballot-encoder": "^4.0.0",
-    "@votingworks/hmpb-interpreter": "^5.1.3",
+    "@votingworks/hmpb-interpreter": "https://github.com/votingworks/hmpb-interpreter.git#fix/allow-taller-contests",
     "@votingworks/qrdetect": "^1.0.1",
     "base64-js": "^1.3.1",
     "body-parser": "^1.19.0",
