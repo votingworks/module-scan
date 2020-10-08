@@ -1,7 +1,7 @@
 import { BINARY_COLORS, map } from '../utils/colors.js'
 import SheetPageCell from './SheetPageCell.js'
 
-const { useState, useEffect } = React
+const { useCallback, useState, useEffect } = React
 
 /**
  * @typedef {object} Sheet
@@ -36,6 +36,73 @@ const SheetList = () => {
     })()
   }, [])
 
+  const onPageClicked = useCallback(
+    /**
+     * @param {'front' | 'back'} side
+     * @param {string} sheetId
+     */
+    async (side, sheetId) => {
+      console.log({ sheets, sheetId })
+      const sheet = sheets.find((s) => s.id === sheetId)
+      const page =
+        side === 'front' ? sheet.frontInterpretation : sheet.backInterpretation
+      console.log({ side, sheetId, sheet, page })
+      const imageURL = `/scan/hmpb/ballot/${sheetId}/${side}/image/normalized`
+      const w = window.open('about:blank')
+      w?.document.write(
+        `
+        <img src="${imageURL}" style="position: absolute; top: 0; left: 0;">
+        ${
+          page.type === 'InterpretedHmpbPage'
+            ? `
+            <div style="position: absolute; top: 0; left: 0; width: ${
+              page.markInfo.ballotSize.width
+            }px; height: ${page.markInfo.ballotSize.height}px;">
+              ${page.markInfo.marks
+                .filter((mark) => mark.type !== 'stray')
+                .map(
+                  /** @param {import('@votingworks/hmpb-interpreter').BallotTargetMark} mark */ (
+                    mark
+                  ) => `
+                <div style="position: absolute; top: ${
+                  mark.bounds.y
+                }px; left: ${mark.bounds.x}px; width: ${
+                    mark.bounds.width
+                  }px; height: ${
+                    mark.bounds.height
+                  }px; background: #ff000099;"></div>
+
+                <div style="position: absolute; top: ${
+                  mark.bounds.y + mark.scoredOffset.y
+                }px; left: ${mark.bounds.x + mark.scoredOffset.x}px; width: ${
+                    mark.bounds.width
+                  }px; height: ${
+                    mark.bounds.height
+                  }px; background: #00ff0099;"></div>
+                <div style="position: absolute; top: ${
+                  mark.target.inner.y + mark.scoredOffset.y
+                }px; left: ${
+                    mark.target.inner.x + mark.scoredOffset.x
+                  }px; width: ${mark.target.inner.width}px; height: ${
+                    mark.target.inner.height
+                  }px; background: #0000ff99;" title="score: ${
+                    mark.score
+                  }, scored offset: x=${mark.scoredOffset.x} y=${
+                    mark.scoredOffset.y
+                  }"></div>
+              `
+                )
+                .join('')}
+            </div>
+            `
+            : ''
+        }
+        `
+      )
+    },
+    [sheets]
+  )
+
   return isLoading
     ? h('p', {}, 'Loading…')
     : h('table', { className: 'sheet-list' }, [
@@ -66,10 +133,16 @@ const SheetList = () => {
                 h(SheetPageCell, {
                   key: 'front',
                   interpretation: sheet.frontInterpretation,
+                  onClick() {
+                    onPageClicked('front', sheet.id)
+                  },
                 }),
                 h(SheetPageCell, {
                   key: 'back',
                   interpretation: sheet.backInterpretation,
+                  onClick() {
+                    onPageClicked('back', sheet.id)
+                  },
                 }),
               ]
             )

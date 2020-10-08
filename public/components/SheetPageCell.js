@@ -88,13 +88,14 @@ function interpretationTitle(interpretation) {
 /**
  * @typedef {object} Props
  * @property {PageInterpretation} interpretation
+ * @property {import('react').MouseEventHandler<HTMLElement>} onClick
  */
 
 /**
  * @param {Props} param0
  */
-const SheetPageCell = ({ interpretation }) => {
-  return h('td', { className: 'sheet-page-cell' }, [
+const SheetPageCell = ({ interpretation, onClick }) => {
+  return h('td', { className: 'sheet-page-cell', onClick }, [
     h(
       'div',
       { className: 'sheet-page-cell--title', key: 'title' },
