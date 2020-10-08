@@ -73,16 +73,16 @@ const SheetList = () => {
                   }px; background: #ff000099;"></div>
 
                 <div style="position: absolute; top: ${
-                  mark.bounds.y + mark.scoredOffset.y
-                }px; left: ${mark.bounds.x + mark.scoredOffset.x}px; width: ${
-                    mark.bounds.width
-                  }px; height: ${
+                  mark.bounds.y + mark.scoredOffset?.y ?? 0
+                }px; left: ${
+                    mark.bounds.x + mark.scoredOffset?.x ?? 0
+                  }px; width: ${mark.bounds.width}px; height: ${
                     mark.bounds.height
                   }px; background: #00ff0099;"></div>
                 <div style="position: absolute; top: ${
-                  mark.target.inner.y + mark.scoredOffset.y
+                  mark.target.inner.y + mark.scoredOffset?.y ?? 0
                 }px; left: ${
-                    mark.target.inner.x + mark.scoredOffset.x
+                    mark.target.inner.x + mark.scoredOffset?.x ?? 0
                   }px; width: ${mark.target.inner.width}px; height: ${
                     mark.target.inner.height
                   }px; background: #0000ff99;">
