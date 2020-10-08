@@ -85,11 +85,11 @@ const SheetList = () => {
                     mark.target.inner.x + mark.scoredOffset.x
                   }px; width: ${mark.target.inner.width}px; height: ${
                     mark.target.inner.height
-                  }px; background: #0000ff99;" title="score: ${
-                    mark.score
-                  }, scored offset: x=${mark.scoredOffset.x} y=${
-                    mark.scoredOffset.y
-                  }"></div>
+                  }px; background: #0000ff99;">
+                    <div style="font-family: Arial, Helvetica, sans-serif; font-size: 0.7em; position: absolute; top: ${
+                      mark.target.bounds.height + 5
+                    }px">${Math.round(mark.score * 10000) / 100}%</div>
+                  </div>
               `
                 )
                 .join('')}
