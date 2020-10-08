@@ -9,14 +9,17 @@ import express, { Application, RequestHandler } from 'express'
 import { readFile } from 'fs-extra'
 import multer from 'multer'
 import * as path from 'path'
+import sharp, { Channels } from 'sharp'
 import { inspect } from 'util'
 import backup from './backup'
 import SystemImporter, { Importer } from './importer'
+import { PageInterpretation } from './interpreter'
 import { FujitsuScanner, Scanner } from './scanner'
 import Store, { ALLOWED_CONFIG_KEYS, ConfigKey } from './store'
 import { BallotConfig, ElectionDefinition } from './types'
 import { fromElection, validate } from './util/electionDefinition'
 import makeTemporaryBallotImportImageDirectories from './util/makeTemporaryBallotImportImageDirectories'
+import pdfToImages from './util/pdfToImages'
 import { Input, Output } from './workers/interpret'
 import { childProcessPool, WorkerPool } from './workers/pool'
 
@@ -384,15 +387,87 @@ export function buildApp({ store, importer }: AppOptions): Application {
       if (
         typeof sheetId !== 'string' ||
         (side !== 'front' && side !== 'back') ||
-        (version !== 'original' && version !== 'normalized')
+        (version !== 'original' &&
+          version !== 'normalized' &&
+          version !== 'template')
       ) {
         response.status(404)
         return
       }
+
+      if (version === 'template') {
+        const { interpretationJSON } = await store.dbGetAsync(
+          `
+          select ${side}_interpretation_json as interpretationJSON from sheets where id = ?
+        `,
+          sheetId
+        )
+        const interpretation = JSON.parse(
+          interpretationJSON
+        ) as PageInterpretation
+        if (
+          'metadata' in interpretation &&
+          'pageNumber' in interpretation.metadata
+        ) {
+          const row = await store.dbGetAsync<
+            { pdf: Buffer } | undefined,
+            [string, string, boolean, string, string | null]
+          >(
+            `
+            select pdf
+            from hmpb_templates
+            where
+              json_extract(metadata_json, '$.ballotStyleId') = ? and
+              json_extract(metadata_json, '$.precinctId') = ? and
+              json_extract(metadata_json, '$.isTestMode') = ? and
+              json_extract(metadata_json, '$.locales.primary') = ? and
+              json_extract(metadata_json, '$.locales.secondary') ${
+                interpretation.metadata.locales.secondary ? '=' : 'is'
+              } ?
+          `,
+            interpretation.metadata.ballotStyleId,
+            interpretation.metadata.precinctId,
+            interpretation.metadata.isTestMode,
+            interpretation.metadata.locales.primary,
+            interpretation.metadata.locales.secondary ?? null
+          )
+
+          if (!row) {
+            response.status(404).end()
+            return
+          }
+
+          for await (const { page } of pdfToImages(row.pdf, {
+            scale: 2,
+            initialPage: interpretation.metadata.pageNumber,
+          })) {
+            response.header('Content-Type', 'image/png')
+            response.send(
+              await sharp(Buffer.from(page.data), {
+                raw: {
+                  width: page.width,
+                  height: page.height,
+                  channels: (page.data.length /
+                    page.width /
+                    page.height) as Channels,
+                },
+              })
+                .png()
+                .toBuffer()
+            )
+            break
+          }
+        }
+      }
       const filenames = await store.getBallotFilenames(sheetId, side)
 
       if (filenames && version in filenames) {
-        response.sendFile(filenames[version as keyof typeof filenames])
+        const filename = filenames[version as keyof typeof filenames]
+        response.sendFile(
+          path.isAbsolute(filename)
+            ? filename
+            : path.join(process.cwd(), filename)
+        )
       } else {
         response.status(404).end()
       }
