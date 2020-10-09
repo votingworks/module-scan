@@ -22,6 +22,7 @@ import {
   metadataFromBytes,
   Size,
 } from '@votingworks/hmpb-interpreter'
+import { ContestShape } from '@votingworks/hmpb-interpreter/dist/src/hmpb/findContests'
 import makeDebug from 'debug'
 import sharp from 'sharp'
 import { BallotMetadata, isErrorResult, Result, SheetOf } from './types'
@@ -76,6 +77,7 @@ export interface InterpretedHmpbPage {
   type: 'InterpretedHmpbPage'
   ballotId?: string
   metadata: BallotPageMetadata
+  contests: ContestShape[]
   markInfo: MarkInfo
   votes: VotesDict
   adjudicationInfo: AdjudicationInfo
@@ -377,6 +379,7 @@ export default class SummaryBallotInterpreter implements Interpreter {
     const hmpbInterpreter = this.getHmbpInterpreter()
     const {
       ballot,
+      contests,
       marks,
       mappedBallot,
       metadata,
@@ -430,6 +433,7 @@ export default class SummaryBallotInterpreter implements Interpreter {
       interpretation: {
         type: 'InterpretedHmpbPage',
         metadata,
+        contests,
         markInfo: {
           marks,
           ballotSize: {

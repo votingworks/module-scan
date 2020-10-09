@@ -233,7 +233,6 @@ export default class Store {
     sql: string,
     ...params: P
   ): Promise<T> {
-    console.log(sql, { params })
     const db = await this.getDb()
     return new Promise<T>((resolve, reject) => {
       db.get(sql, params, (err: unknown, row: T) => {
