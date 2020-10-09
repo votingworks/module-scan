@@ -80,11 +80,6 @@ const SheetList = () => {
         }px; height: ${page.markInfo.ballotSize.height}px;">
           <img src="${templateImageURL}" style="position: absolute; top: 0; left: 0;">
           <img src="${imageURL}" style="position: absolute; top: 0; left: 0; opacity: 0.5;" id="normalized-image">
-          ${page.contests.map(
-            (contest) => `
-            <div style="position: absolute; left: ${contest.bounds.x}px; top: ${contest.bounds.y}px; width: ${contest.bounds.width}px; height: ${contest.bounds.height}px; background: #00000033;"></div>
-          `
-          )}
           ${page.markInfo.marks
             .filter((mark) => mark.type !== 'stray')
             .map(
