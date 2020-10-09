@@ -12,6 +12,8 @@ import {
   BallotMark,
   BallotPageMetadata,
   BallotTargetMark,
+  BallotMsEitherNeitherTargetMark,
+  BallotYesNoTargetMark,
   Size,
 } from '@votingworks/hmpb-interpreter'
 import { createHash } from 'crypto'
@@ -67,6 +69,43 @@ export const ALLOWED_CONFIG_KEYS: readonly string[] = Object.values(ConfigKey)
 export const DefaultMarkThresholds: Readonly<MarkThresholds> = {
   marginal: 0.17,
   definite: 0.25,
+}
+
+const leanInterpretation = (
+  interpretation: PageInterpretation | undefined
+): PageInterpretation | undefined => {
+  if (!interpretation) {
+    return interpretation
+  }
+
+  if (interpretation.type !== 'InterpretedHmpbPage') {
+    return { ...interpretation }
+  }
+
+  return {
+    ...interpretation,
+    markInfo: {
+      ...interpretation.markInfo,
+      marks: interpretation.markInfo.marks.map((mark) => {
+        if (mark.contest) {
+          if (
+            mark.contest.type === 'ms-either-neither' ||
+            mark.contest.type === 'yesno'
+          ) {
+            return {
+              ...mark,
+              contest: {
+                ...mark.contest,
+                description: '',
+              },
+            } as BallotMsEitherNeitherTargetMark | BallotYesNoTargetMark
+          }
+        }
+
+        return { ...mark }
+      }),
+    },
+  }
 }
 
 /**
@@ -466,10 +505,10 @@ export default class Store {
         batchId,
         front.originalFilename,
         front.normalizedFilename,
-        JSON.stringify(front.interpretation),
+        JSON.stringify(leanInterpretation(front.interpretation)),
         back.originalFilename,
         back.normalizedFilename,
-        JSON.stringify(back.interpretation ?? {}),
+        JSON.stringify(leanInterpretation(back.interpretation) ?? {}),
         sheetRequiresAdjudication([front.interpretation, back.interpretation])
       )
     } catch (error) {
