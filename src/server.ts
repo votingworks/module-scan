@@ -213,6 +213,7 @@ export function buildApp({ store, importer }: AppOptions): Application {
           deleted_at as deletedAt
         from sheets
         order by created_at desc
+        limit 100
       `)
 
       response.json(
